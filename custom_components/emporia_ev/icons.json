@@ -1,0 +1,39 @@
+{
+  "entity": {
+    "switch": {
+      "charging": {
+        "default": "mdi:ev-station"
+      }
+    },
+    "number": {
+      "charge_rate": {
+        "default": "mdi:current-ac"
+      }
+    },
+    "sensor": {
+      "power": {
+        "default": "mdi:flash"
+      },
+      "energy": {
+        "default": "mdi:lightning-bolt"
+      },
+      "charger_status": {
+        "default": "mdi:ev-station",
+        "state": {
+          "charging": "mdi:battery-charging",
+          "plugged_in_idle": "mdi:power-plug",
+          "not_plugged_in": "mdi:power-plug-off",
+          "error": "mdi:alert"
+        }
+      },
+      "vehicle_battery": {
+        "default": "mdi:car-electric"
+      }
+    },
+    "binary_sensor": {
+      "plugged_in": {
+        "default": "mdi:power-plug"
+      }
+    }
+  }
+}
