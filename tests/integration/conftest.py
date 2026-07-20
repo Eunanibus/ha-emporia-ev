@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+import custom_components as _cc_pkg
 from custom_components.emporia_ev.client import Charger, ChargerStatus
 from custom_components.emporia_ev.const import (
     CONF_ADAPTIVE,
@@ -15,6 +16,19 @@ from custom_components.emporia_ev.const import (
     CONF_IDLE_INTERVAL,
     DOMAIN,
 )
+
+# ---------------------------------------------------------------------------
+# Editable-install path fixup
+# ---------------------------------------------------------------------------
+# The editable install injects a fake "__editable__.emporia_ev-*.finder.__path_hook__"
+# sentinel into custom_components.__path__ so the namespace finder works.
+# HA's loader tries to iterate every path in __path__ as a real directory,
+# which causes a FileNotFoundError.  We strip the sentinel here at import
+# time (once per session) — it is NOT a real directory and HA doesn't need it
+# because it resolves the real path from the first entry.
+_cc_pkg.__path__ = [  # type: ignore[attr-defined]
+    p for p in _cc_pkg.__path__ if not str(p).startswith("__editable__")
+]
 
 
 @pytest.fixture(autouse=True)
