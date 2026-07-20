@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtualenv
+.venv/
+venv/
+env/
+
+# Test / tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets & local config — NEVER commit real Emporia creds
+.env
+*.env
+scripts/.emporia_env
+secrets.yaml
+
+# Raw API captures used to build test fixtures (may contain tokens/serials)
+tests/library/fixtures/raw/
+captures/
+*.raw.json
+*.har
