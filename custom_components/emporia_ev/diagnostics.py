@@ -17,6 +17,7 @@ TO_REDACT = {
     "id_token",
     "access_token",
     "refresh_token",
+    "name",
     "serial",
     "serial_number",
 }

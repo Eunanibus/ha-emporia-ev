@@ -36,3 +36,6 @@ async def test_diagnostics_redacts_secrets(
     assert "chargers" in diag
     assert "status" in diag
     assert diag["status"]["chg-1"]["charge_rate_amps"] == 32
+    # Charger name (can be a street-address-like label) and serial must be redacted.
+    assert diag["chargers"]["chg-1"]["name"] == "**REDACTED**"
+    assert diag["chargers"]["chg-1"]["serial"] == "**REDACTED**"

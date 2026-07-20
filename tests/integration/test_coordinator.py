@@ -29,7 +29,7 @@ from custom_components.emporia_ev.client import (
 )
 from custom_components.emporia_ev.coordinator import EmporiaDataUpdateCoordinator
 
-from .conftest import make_status
+from .conftest import make_charger, make_status
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -243,3 +243,39 @@ async def test_adaptive_disabled_pins_idle_interval(
     mock_client.async_get_energy.return_value = {}
     await coordinator._async_update_data()
     assert coordinator.update_interval == timedelta(seconds=30)
+
+
+# ---------------------------------------------------------------------------
+# New charger appears mid-cycle
+# ---------------------------------------------------------------------------
+
+
+async def test_new_charger_mid_cycle_triggers_device_refresh(
+    hass: HomeAssistant,
+    mock_client,
+    mock_config_entry,
+) -> None:
+    """When a new charger id appears in status, the device list is re-fetched.
+
+    After a first refresh with one charger (chg-1), update the mocks so that
+    the status endpoint now includes chg-2 and the device list also returns
+    both chargers.  The coordinator must detect the unknown id and call
+    async_get_chargers again, resulting in chg-2 appearing in coordinator.chargers.
+    """
+    coordinator = await _make_coordinator(hass, mock_config_entry, mock_client)
+    assert set(coordinator.chargers) == {"chg-1"}
+
+    # Now both status AND the device list include chg-2.
+    mock_client.async_get_charger_status.return_value = {
+        "chg-1": make_status(),
+        "chg-2": make_status(charging_state="not_plugged_in", plugged_in=False),
+    }
+    mock_client.async_get_chargers.return_value = [
+        make_charger("chg-1"),
+        make_charger("chg-2", name="Driveway"),
+    ]
+    mock_client.async_get_energy.return_value = {}
+
+    await coordinator.async_refresh()
+
+    assert "chg-2" in coordinator.chargers

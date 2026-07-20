@@ -27,7 +27,7 @@ draw and status, and wire everything into your automations.
 
 ## Requirements
 
-- Home Assistant 2024.4 or later
+- Home Assistant 2024.8 or later
 - [HACS](https://hacs.xyz) installed
 - An Emporia Energy account with at least one EV charger linked
 

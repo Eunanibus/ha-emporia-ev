@@ -175,6 +175,10 @@ class Vehicle:
 
         Returns:
             A frozen Vehicle instance, or None when no ``vehicle`` block exists.
+
+        Note: UNPINNED/PROVISIONAL — which payload (STATUS vs customers/devices)
+        actually carries the ``vehicle`` block is unconfirmed; re-capture with a
+        car connected and reconcile before relying on vehicle battery data.
         """
         vehicle = device.get("vehicle")
         if not vehicle:

@@ -76,6 +76,24 @@ async def test_user_flow_bad_credentials(hass: HomeAssistant) -> None:
     assert result["errors"] == {"base": "invalid_auth"}
 
 
+async def test_user_flow_cannot_connect(hass: HomeAssistant) -> None:
+    from custom_components.emporia_ev.client import EmporiaConnectionError
+
+    client, auth = _patched_client()
+    client.authenticate.side_effect = EmporiaConnectionError("connection refused")
+    with (
+        patch(_PATCH_SESSION, return_value=MagicMock()),
+        patch("custom_components.emporia_ev.config_flow.EmporiaAuth", return_value=auth),
+        patch("custom_components.emporia_ev.config_flow.EmporiaClient", return_value=client),
+    ):
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"username": "user@example.com", "password": "anything"}
+        )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "cannot_connect"}
+
+
 async def test_duplicate_account_aborts(hass: HomeAssistant) -> None:
     existing = MockConfigEntry(domain=DOMAIN, unique_id="acct-42")
     existing.add_to_hass(hass)

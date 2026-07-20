@@ -95,6 +95,12 @@ class EmporiaClient:
         Iterates ``evChargers[]``; calls ``Vehicle.from_device`` (which looks for
         a ``vehicle`` sub-dict and returns None if absent). With the real fixture
         (no car connected) this returns ``{}``.
+
+        UNPINNED/PROVISIONAL: The vehicle block shape and which endpoint actually
+        carries it (this STATUS payload vs the ``customers/devices`` payload) has
+        NOT been confirmed — no capture was made with a car connected.  Re-capture
+        with a connected vehicle and reconcile payload source + field names in
+        ``Vehicle.from_device`` before relying on vehicle battery data.
         """
         payload = await self._request("GET", "customers/devices/status")
         vehicles: dict[str, Vehicle] = {}
