@@ -30,6 +30,14 @@ DEFAULT_AMPS = 32
 # Adaptive-interval hysteresis: relax to idle only after N non-charging polls.
 RELAX_AFTER_N = 2
 
+# Transient-failure tolerance: keep the last-known data (entities stay available)
+# through this many CONSECUTIVE connection failures before surfacing an
+# UpdateFailed. Stops a single flaky-DNS poll from flapping every entity to
+# "unavailable" and back — which would otherwise spam the activity log with
+# state changes that aren't real. Only connection/transport errors are tolerated;
+# auth failures and rate limits are handled separately.
+MAX_TRANSIENT_FAILURES = 3
+
 # Optimistic-command grace window (seconds). Must comfortably exceed Emporia's
 # cloud propagation lag (a command takes several seconds to reflect in the
 # status endpoint) so the switch/number don't briefly flip back to the stale

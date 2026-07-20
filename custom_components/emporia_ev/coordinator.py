@@ -34,6 +34,7 @@ from .const import (
     DEFAULT_CHARGING_INTERVAL,
     DEFAULT_IDLE_INTERVAL,
     DOMAIN,
+    MAX_TRANSIENT_FAILURES,
     RELAX_AFTER_N,
 )
 
@@ -64,6 +65,7 @@ class EmporiaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, ChargerStatus
         self.chargers: dict[str, Charger] = {}
         self.vehicles: dict[str, Vehicle] = {}
         self._non_charging_polls: int = 0
+        self._consecutive_failures: int = 0
         super().__init__(
             hass,
             _LOGGER,
@@ -114,10 +116,12 @@ class EmporiaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, ChargerStatus
                 kwh = energy.get(cid, 0.0)
                 # Power = average watts over the 1-minute window.
                 # kWh → kW: multiply by 60 (min⁻¹ → h⁻¹); kW → W: multiply by 1000.
+                # Round to a whole watt so tiny float differences between polls
+                # don't register as state changes (which would spam the logbook).
                 merged[cid] = dataclasses.replace(
                     cs,
-                    energy_kwh=kwh,
-                    power_w=kwh * 60 * 1000,
+                    energy_kwh=round(kwh, 4),
+                    power_w=round(kwh * 60 * 1000),
                 )
 
         except AuthError as err:
@@ -130,8 +134,24 @@ class EmporiaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, ChargerStatus
                 return self.data
             raise UpdateFailed("Rate limited before first data") from err
         except (EmporiaConnectionError, EmporiaError) as err:
+            # Tolerate transient connection blips (e.g. flaky container DNS):
+            # keep the last-known data so entities stay available rather than
+            # flapping to "unavailable" and back — which would spam the activity
+            # log with state changes that aren't real. Only surface UpdateFailed
+            # once failures are sustained (or we have no prior data to fall back on).
+            self._consecutive_failures += 1
+            if self.data is not None and self._consecutive_failures < MAX_TRANSIENT_FAILURES:
+                _LOGGER.debug(
+                    "Transient fetch failure %s/%s; keeping last-known data: %s",
+                    self._consecutive_failures,
+                    MAX_TRANSIENT_FAILURES,
+                    err,
+                )
+                return self.data
             raise UpdateFailed(str(err)) from err
 
+        # Successful cycle — reset the transient-failure counter.
+        self._consecutive_failures = 0
         self._apply_adaptive_interval(merged)
         return merged
 

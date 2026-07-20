@@ -147,6 +147,71 @@ async def test_connection_error_maps_to_update_failed(
         await coordinator._async_update_data()
 
 
+async def test_transient_failure_keeps_last_data_no_flap(
+    hass: HomeAssistant,
+    mock_client,
+    mock_config_entry,
+) -> None:
+    """A single connection blip after a good poll keeps the last-known data.
+
+    Entities must stay available (not flap to unavailable and back), so the
+    activity log isn't spammed with non-changes. last_update_success stays True
+    because _async_update_data returns data instead of raising.
+    """
+    coordinator = await _make_coordinator(hass, mock_config_entry, mock_client)
+    prior = coordinator.data
+    assert prior is not None
+
+    # One transient failure — should NOT raise; returns the prior data.
+    mock_client.async_get_charger_status.side_effect = EmporiaConnectionError("dns blip")
+    result = await coordinator._async_update_data()
+    assert result == prior
+
+
+async def test_sustained_failures_eventually_update_failed(
+    hass: HomeAssistant,
+    mock_client,
+    mock_config_entry,
+) -> None:
+    """After MAX_TRANSIENT_FAILURES consecutive blips, surface UpdateFailed."""
+    from custom_components.emporia_ev.const import MAX_TRANSIENT_FAILURES
+
+    coordinator = await _make_coordinator(hass, mock_config_entry, mock_client)
+    mock_client.async_get_charger_status.side_effect = EmporiaConnectionError("down")
+
+    # The first (MAX-1) failures are tolerated (return last data)...
+    for _ in range(MAX_TRANSIENT_FAILURES - 1):
+        assert await coordinator._async_update_data() == coordinator.data
+    # ...the MAX-th consecutive failure surfaces UpdateFailed.
+    with pytest.raises(UpdateFailed):
+        await coordinator._async_update_data()
+
+
+async def test_failure_counter_resets_on_success(
+    hass: HomeAssistant,
+    mock_client,
+    mock_config_entry,
+) -> None:
+    """A successful poll resets the transient-failure counter."""
+    from custom_components.emporia_ev.const import MAX_TRANSIENT_FAILURES
+
+    coordinator = await _make_coordinator(hass, mock_config_entry, mock_client)
+
+    # One failure (tolerated), then success, then more failures: the success
+    # must reset the counter so we again tolerate up to MAX-1 before failing.
+    mock_client.async_get_charger_status.side_effect = EmporiaConnectionError("blip")
+    await coordinator._async_update_data()  # failure 1 (tolerated)
+
+    mock_client.async_get_charger_status.side_effect = None  # recover
+    await coordinator._async_update_data()  # success -> resets counter
+
+    mock_client.async_get_charger_status.side_effect = EmporiaConnectionError("blip")
+    for _ in range(MAX_TRANSIENT_FAILURES - 1):
+        assert await coordinator._async_update_data() == coordinator.data
+    with pytest.raises(UpdateFailed):
+        await coordinator._async_update_data()
+
+
 async def test_rate_limit_keeps_last_data_and_backs_off(
     hass: HomeAssistant,
     mock_client,
