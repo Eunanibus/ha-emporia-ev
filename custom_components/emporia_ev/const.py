@@ -30,8 +30,11 @@ DEFAULT_AMPS = 32
 # Adaptive-interval hysteresis: relax to idle only after N non-charging polls.
 RELAX_AFTER_N = 2
 
-# Optimistic-command grace window (seconds); ~2 charging cycles.
-OPTIMISTIC_GRACE_SECONDS = 30
+# Optimistic-command grace window (seconds). Must comfortably exceed Emporia's
+# cloud propagation lag (a command takes several seconds to reflect in the
+# status endpoint) so the switch/number don't briefly flip back to the stale
+# pre-command value before the cloud catches up. ~3 charging poll cycles.
+OPTIMISTIC_GRACE_SECONDS = 45
 
 MANUFACTURER = "Emporia"
 

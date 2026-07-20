@@ -59,6 +59,12 @@ class EmporiaClient:
         self._auth = auth
         self._base_url = base_url.rstrip("/")
         self.account_id: str | None = None
+        # Last-seen raw evChargers[] object per charger id. The set-charger PUT
+        # must echo back the FULL charger object (deviceGid, loadGid, chargerOn,
+        # chargingRate, maxChargingRate, breakerPIN, ...) — Emporia rejects a
+        # partial body with HTTP 400 — so we cache what the status endpoint gave
+        # us and mutate only chargerOn/chargingRate when sending a command.
+        self._raw_chargers: dict[str, dict[str, Any]] = {}
 
     async def authenticate(self) -> None:
         """Ensure a valid token AND populate account_id (raises AuthError)."""
@@ -84,10 +90,13 @@ class EmporiaClient:
         nested ``evCharger`` sub-dict.
         """
         payload = await self._request("GET", "customers/devices/status")
-        return {
-            str(evc["deviceGid"]): ChargerStatus.from_evcharger(evc)
-            for evc in payload.get("evChargers", [])
-        }
+        result: dict[str, ChargerStatus] = {}
+        for evc in payload.get("evChargers", []):
+            cid = str(evc["deviceGid"])
+            # Cache the full raw object so async_set_charger can echo it back.
+            self._raw_chargers[cid] = evc
+            result[cid] = ChargerStatus.from_evcharger(evc)
+        return result
 
     async def async_get_vehicles(self) -> dict[str, Vehicle]:
         """GET customers/devices/status → ``{str(deviceGid): Vehicle}`` (best-effort).
@@ -162,12 +171,33 @@ class EmporiaClient:
     async def async_set_charger(
         self, charger_id: str, *, enabled: bool, charge_rate_amps: int
     ) -> None:
-        """PUT devices/evcharger — enable/disable the charger and set charge rate."""
-        body: dict[str, Any] = {
-            "deviceGid": int(charger_id),
-            "chargerOn": enabled,
-            "chargingRate": charge_rate_amps,
-        }
+        """PUT devices/evcharger — enable/disable the charger and set charge rate.
+
+        Emporia requires the FULL charger object on this PUT (it returns HTTP 400
+        for a partial body). We echo back the last raw ``evChargers[]`` object
+        seen from the status endpoint, mutating only ``chargerOn`` and
+        ``chargingRate`` — mirroring PyEmVue's ``charger.as_dictionary()``
+        round-trip (deviceGid, loadGid, chargerOn, chargingRate, maxChargingRate,
+        breakerPIN). If no raw object is cached yet (no status poll has run), fall
+        back to the minimal identifying fields.
+        """
+        raw = self._raw_chargers.get(charger_id)
+        if raw is not None:
+            body: dict[str, Any] = {
+                "deviceGid": raw.get("deviceGid", int(charger_id)),
+                "loadGid": raw.get("loadGid"),
+                "chargerOn": enabled,
+                "chargingRate": charge_rate_amps,
+                "maxChargingRate": raw.get("maxChargingRate"),
+            }
+            if raw.get("breakerPIN"):
+                body["breakerPIN"] = raw["breakerPIN"]
+        else:
+            body = {
+                "deviceGid": int(charger_id),
+                "chargerOn": enabled,
+                "chargingRate": charge_rate_amps,
+            }
         await self._request("PUT", "devices/evcharger", json=body)
 
     async def _request(

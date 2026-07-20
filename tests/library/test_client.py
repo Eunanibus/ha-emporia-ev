@@ -246,6 +246,53 @@ async def test_set_charger_puts_expected_payload() -> None:
 
 
 @pytest.mark.asyncio
+async def test_set_charger_echoes_full_object_after_status_poll() -> None:
+    """Regression: Emporia rejects a partial set-charger body with HTTP 400.
+
+    After a status poll caches the raw evChargers[] object, the PUT body must
+    echo the FULL object (loadGid, maxChargingRate, breakerPIN when present) with
+    only chargerOn/chargingRate mutated — mirroring PyEmVue's as_dictionary().
+    A live test previously failed with 400 because we sent only 3 fields.
+    """
+    status_payload = _load("device_status.json")
+    # Pull the real charger's identifiers from the fixture to assert against.
+    evc = status_payload["evChargers"][0]
+    gid = str(evc["deviceGid"])
+    captured: dict = {}  # type: ignore[type-arg]
+
+    def _capture_body(url: object, **kwargs: object) -> None:
+        captured.update(kwargs.get("json") or {})  # type: ignore[arg-type]
+
+    async with _session() as session:
+        client = EmporiaClient(session, _stub_auth())
+        with aioresponses() as mocked:
+            mocked.get(
+                f"{BASE_URL}/customers/devices/status",
+                status=200,
+                payload=status_payload,
+                headers=_content_length_header(status_payload),
+            )
+            mocked.put(
+                f"{BASE_URL}/devices/evcharger",
+                status=200,
+                payload={},
+                headers=_content_length_header({}),
+                callback=_capture_body,
+            )
+            await client.async_get_charger_status()  # caches the raw object
+            await client.async_set_charger(gid, enabled=False, charge_rate_amps=24)
+
+    # Mutated fields
+    assert captured.get("chargerOn") is False
+    assert captured.get("chargingRate") == 24
+    # Full-object fields echoed from the cached status (these were MISSING before,
+    # causing the 400). loadGid + maxChargingRate must be present.
+    assert captured.get("deviceGid") == evc["deviceGid"]
+    assert captured.get("loadGid") == evc["loadGid"]
+    assert captured.get("maxChargingRate") == evc["maxChargingRate"]
+
+
+@pytest.mark.asyncio
 async def test_set_charger_succeeds_with_204_no_content() -> None:
     """async_set_charger succeeds when PUT returns HTTP 204 with no body.
 
