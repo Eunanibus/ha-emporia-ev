@@ -94,6 +94,8 @@ All entity names are device-relative (`has_entity_name = True`).
 After setup, click **Configure** on the integration card to adjust polling and
 default behaviour.
 
+![Emporia EV Charger options dialog — adaptive polling toggle, idle and charging poll intervals, and default charge rate](docs/images/options.png)
+
 | Option                     | Default | Description                                                                                                                                                     |
 | -------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Idle poll interval**     | 30 s    | How often to poll when not charging.                                                                                                                            |
