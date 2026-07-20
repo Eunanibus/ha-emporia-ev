@@ -1,0 +1,3 @@
+{
+  "message": "unit 'WATTS' is not a valid EnergyUnit; defined EnergyUnit are [KilowattHours, Dollars, AmpHours, Trees, GallonsOfGas, MilesDriven, Carbon, Voltage]"
+}

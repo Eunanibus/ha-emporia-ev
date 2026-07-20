@@ -1,0 +1,43 @@
+{
+  "batteries": [],
+  "devicesConnected": [
+    {
+      "connected": true,
+      "deviceGid": "1111111111",
+      "offlineSince": null
+    }
+  ],
+  "evChargers": [
+    {
+      "breakerPIN": "5426",
+      "chargerOn": true,
+      "chargingRate": 40,
+      "debugCode": "011",
+      "deviceGid": "1111111111",
+      "faultText": null,
+      "hideChargeRateSliderText": null,
+      "icon": "CarNotConnected",
+      "iconDetailText": "Charger will start charging when connected to a vehicle.",
+      "iconLabel": "Ready",
+      "loadGid": 386601,
+      "loadManagementEnabled": false,
+      "maxChargingRate": 40,
+      "message": "Ready",
+      "proControlCode": null,
+      "status": "Standby"
+    }
+  ],
+  "loads": [
+    {
+      "energyManagementOverridden": false,
+      "energyManagementText": null,
+      "excessGenerationEnabled": false,
+      "loadGid": 386601,
+      "nextScheduledEventText": null,
+      "peakDemandEnabled": false,
+      "schedulesEnabled": false,
+      "warningText": null
+    }
+  ],
+  "outlets": []
+}

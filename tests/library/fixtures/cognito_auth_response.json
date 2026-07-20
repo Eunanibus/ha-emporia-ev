@@ -1,0 +1,9 @@
+{
+  "AuthenticationResult": {
+    "AccessToken": "FAKE_TOKEN",
+    "ExpiresIn": 3600,
+    "IdToken": "FAKE_TOKEN",
+    "RefreshToken": "FAKE_TOKEN",
+    "TokenType": "Bearer"
+  }
+}

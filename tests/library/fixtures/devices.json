@@ -1,0 +1,76 @@
+{
+  "createdAt": "2026-05-29T23:10:40Z",
+  "customerGid": "1111111111",
+  "devices": [
+    {
+      "battery": null,
+      "channels": [
+        {
+          "channelId": "Mains",
+          "channelMultiplier": 1.0,
+          "channelNum": "1,2,3",
+          "channelTypeGid": 25,
+          "deviceGid": "1111111111",
+          "mergedChannelId": null,
+          "name": null,
+          "parentChannelNum": null,
+          "type": "Main"
+        }
+      ],
+      "combinedVue": null,
+      "deviceConnected": {
+        "connected": true,
+        "deviceGid": "1111111111",
+        "offlineSince": null
+      },
+      "deviceGid": "1111111111",
+      "devices": [],
+      "evCharger": {
+        "breakerPIN": "5426",
+        "chargerOn": true,
+        "chargingRate": 40,
+        "debugCode": "011",
+        "deviceGid": "1111111111",
+        "faultText": null,
+        "hideChargeRateSliderText": null,
+        "icon": "CarNotConnected",
+        "iconDetailText": "Charger will start charging when connected to a vehicle.",
+        "iconLabel": "Ready",
+        "loadGid": 386601,
+        "loadManagementEnabled": false,
+        "maxChargingRate": 40,
+        "message": "Ready",
+        "proControlCode": null,
+        "status": "Standby"
+      },
+      "firmware": "EVCharger-812",
+      "locationProperties": {
+        "billingCycleStartDay": 1,
+        "deviceGid": "1111111111",
+        "deviceName": "701 Zephyr",
+        "displayName": "701 Zephyr",
+        "latitudeLongitude": {
+          "latitude": 37.81288121201189,
+          "longitude": -122.29854445265124
+        },
+        "locationInformation": {
+          "primaryVehicleBrand": "Hyundai"
+        },
+        "peakDemandDollarPerKw": null,
+        "timeZone": "America/Los_Angeles",
+        "usageCentPerKwHour": 13.2,
+        "utilityRateGid": 81522832,
+        "utilityRateMods": null
+      },
+      "manufacturerDeviceId": "1111111111",
+      "model": "VVDN01",
+      "outlet": null,
+      "parentChannelNum": null,
+      "parentDeviceGid": null,
+      "primaryVueGid": null
+    }
+  ],
+  "email": "user@example.com",
+  "firstName": "FAKE_TOKEN",
+  "lastName": "FAKE_TOKEN"
+}

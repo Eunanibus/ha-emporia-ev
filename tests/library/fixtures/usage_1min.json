@@ -1,0 +1,22 @@
+{
+  "deviceListUsages": {
+    "devices": [
+      {
+        "channelUsages": [
+          {
+            "channelNum": "1,2,3",
+            "deviceGid": "1111111111",
+            "name": "Main",
+            "nestedDevices": [],
+            "percentage": 0.0,
+            "usage": 0.0
+          }
+        ],
+        "deviceGid": "1111111111"
+      }
+    ],
+    "energyUnit": "KilowattHours",
+    "instant": "2026-07-20T18:13:32Z",
+    "scale": "1MIN"
+  }
+}
