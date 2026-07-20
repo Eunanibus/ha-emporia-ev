@@ -35,11 +35,16 @@ draw and status, and wire everything into your automations.
 
 ## Installation (HACS)
 
-1. In Home Assistant go to **HACS → Integrations → ⋮ → Custom repositories**.
-2. Paste `https://github.com/Eunanibus/emporia-ev` and choose category
-   **Integration**, then click **Add**.
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Eunanibus&repository=ha-emporia-ev&category=integration)
+
+1. Install [HACS](https://hacs.xyz/) if you don't have it already.
+2. Click the button above to open this repository in HACS — **or** add it
+   manually: **HACS → ⋮ → Custom repositories**, paste
+   `https://github.com/Eunanibus/ha-emporia-ev`, category **Integration**, **Add**.
 3. Search for **Emporia EV Charger** and click **Download**.
-4. Restart Home Assistant.
+4. **Restart Home Assistant.**
+5. Add the integration via **Settings → Devices & Services → Add Integration**
+   (see Configuration below).
 
 ---
 
@@ -254,7 +259,7 @@ an issue on GitHub with the raw status value from the integration diagnostics.
 ## Contributing / Issues
 
 Report bugs and feature requests at
-[github.com/Eunanibus/emporia-ev/issues](https://github.com/Eunanibus/emporia-ev/issues).
+[github.com/Eunanibus/ha-emporia-ev/issues](https://github.com/Eunanibus/ha-emporia-ev/issues).
 Pull requests welcome.
 
 ---

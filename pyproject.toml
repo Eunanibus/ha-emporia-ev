@@ -31,8 +31,8 @@ dev = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/Eunanibus/emporia-ev"
-"Issue Tracker" = "https://github.com/Eunanibus/emporia-ev/issues"
+"Homepage" = "https://github.com/Eunanibus/ha-emporia-ev"
+"Issue Tracker" = "https://github.com/Eunanibus/ha-emporia-ev/issues"
 
 [tool.setuptools]
 packages = ["custom_components.emporia_ev", "custom_components.emporia_ev.client"]
