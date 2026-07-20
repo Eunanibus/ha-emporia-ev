@@ -1,0 +1,51 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Emporia EV Charger",
+        "description": "Sign in with your Emporia app credentials.",
+        "data": { "username": "Email", "password": "Password" }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Emporia",
+        "description": "Your Emporia session expired. Re-enter the password for {username}.",
+        "data": { "password": "Password" }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid email or password.",
+      "cannot_connect": "Could not reach the Emporia cloud. Try again.",
+      "unknown": "Unexpected error. Check the logs."
+    },
+    "abort": {
+      "already_configured": "This Emporia account is already configured.",
+      "reauth_successful": "Re-authentication was successful.",
+      "wrong_account": "Those credentials are for a different Emporia account."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Polling and charging options",
+        "data": {
+          "adaptive": "Adaptive polling (faster while charging)",
+          "idle_interval": "Idle poll interval (seconds)",
+          "charging_interval": "Charging poll interval (seconds)",
+          "default_amps": "Default charge rate (A)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "charger_status": {
+        "state": {
+          "charging": "Charging",
+          "plugged_in_idle": "Plugged in (idle)",
+          "not_plugged_in": "Not plugged in",
+          "error": "Error"
+        }
+      }
+    }
+  }
+}
