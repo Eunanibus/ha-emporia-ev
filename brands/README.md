@@ -6,12 +6,16 @@ repository, keyed by the integration `domain` (`emporia_ev`). These files are
 staged here so they're version-controlled alongside the integration; they must
 be submitted to `home-assistant/brands` to actually appear in HA.
 
-## Files (spec: PNG, transparent background, trimmed, square icon)
+## Files (spec: PNG, transparent background, trimmed)
 - `custom_integrations/emporia_ev/icon.png`     — 256×256 (square app icon)
 - `custom_integrations/emporia_ev/icon@2x.png`  — 512×512 (@2x)
+- `custom_integrations/emporia_ev/logo.png`     — 381×128 (horizontal wordmark)
+- `custom_integrations/emporia_ev/logo@2x.png`  — 1523×512 (@2x)
 
-(A separate horizontal `logo.png`/`logo@2x.png`, max 256px tall, is optional —
-not provided yet.)
+These are the Emporia brand mark (the same leaf + "emporia" wordmark the
+`emporia_vue` brands entry uses), regenerated as this integration's own
+spec-sized assets. Emporia's logo is Emporia's trademark; submit only imagery
+you have the right to publish.
 
 ## Submitting to home-assistant/brands
 1. Fork https://github.com/home-assistant/brands
