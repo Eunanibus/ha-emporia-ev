@@ -414,9 +414,7 @@ async def test_request_exhausts_retries_raises_connection_error(monkeypatch) -> 
 async def test_request_does_not_retry_auth_error(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     """A 401 surfaces immediately as AuthError — it is NOT retried."""
     sleep_mock = AsyncMock(return_value=None)
-    monkeypatch.setattr(
-        "custom_components.emporia_ev.client.client.asyncio.sleep", sleep_mock
-    )
+    monkeypatch.setattr("custom_components.emporia_ev.client.client.asyncio.sleep", sleep_mock)
     async with _session() as session:
         client = EmporiaClient(session, _stub_auth())
         with aioresponses() as mocked:
