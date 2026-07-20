@@ -18,11 +18,11 @@
         "default": "mdi:lightning-bolt"
       },
       "charger_status": {
-        "default": "mdi:ev-station",
+        "default": "mdi:information-outline",
         "state": {
           "charging": "mdi:battery-charging",
-          "plugged_in_idle": "mdi:power-plug",
-          "not_plugged_in": "mdi:power-plug-off",
+          "plugged_in_idle": "mdi:information-outline",
+          "not_plugged_in": "mdi:information-outline",
           "error": "mdi:alert"
         }
       },
