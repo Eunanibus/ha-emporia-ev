@@ -202,7 +202,9 @@ class EmporiaClient:
                 resp.raise_for_status()
                 if resp.status == 204 or not resp.content_length:
                     return {}
-                return await resp.json()  # type: ignore[no-any-return]
+                # content_type=None: don't reject on an unexpected/absent
+                # Content-Type header (some Emporia endpoints mislabel JSON).
+                return await resp.json(content_type=None)  # type: ignore[no-any-return]
         except (AuthError, RateLimitError):
             raise
         except (aiohttp.ClientResponseError, aiohttp.ClientConnectionError) as err:

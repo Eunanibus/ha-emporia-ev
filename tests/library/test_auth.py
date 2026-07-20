@@ -92,6 +92,32 @@ async def test_refresh_exchanges_refresh_token_for_new_access_token() -> None:
 
 
 @pytest.mark.asyncio
+async def test_refresh_parses_cognito_amz_json_mimetype() -> None:
+    # Regression: Cognito replies with Content-Type application/x-amz-json-1.1.
+    # aiohttp's .json() rejects non-application/json unless content_type=None,
+    # which previously surfaced as a confusing "token refresh transport error".
+    body = {
+        "AuthenticationResult": {
+            "IdToken": "AMZ_ID",
+            "AccessToken": "AMZ_ACCESS",
+            "ExpiresIn": 3600,
+            "TokenType": "Bearer",
+        }
+    }
+    async with _session() as session:
+        auth = EmporiaAuth(session, refresh_token="RT")
+        with aioresponses() as mocked:
+            mocked.post(
+                COGNITO_URL,
+                status=200,
+                payload=body,
+                content_type="application/x-amz-json-1.1",
+            )
+            await auth.async_refresh()
+        assert auth.auth_headers() == {"authtoken": "AMZ_ID"}
+
+
+@pytest.mark.asyncio
 async def test_refresh_rejected_raises_autherror() -> None:
     async with _session() as session:
         auth = EmporiaAuth(session, refresh_token="BAD_RT")

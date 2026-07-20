@@ -90,7 +90,10 @@ class EmporiaAuth:
         }
         try:
             async with self._session.post(COGNITO_URL, json=payload, headers=headers) as resp:
-                body: dict[str, Any] = await resp.json()
+                # Cognito replies with Content-Type application/x-amz-json-1.1;
+                # aiohttp's .json() rejects non-application/json unless we opt out
+                # of the content-type check.
+                body: dict[str, Any] = await resp.json(content_type=None)
                 if resp.status != 200:
                     raise AuthError(f"token refresh rejected: {body.get('__type', resp.status)}")
         except aiohttp.ClientError as err:
