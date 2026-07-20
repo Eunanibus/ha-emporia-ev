@@ -1,4 +1,3 @@
-
 from custom_components.emporia_ev.client.errors import (
     AuthError,
     EmporiaConnectionError,
