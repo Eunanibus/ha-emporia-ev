@@ -47,13 +47,11 @@ async def test_power_energy_status_sensors(
     assert power.attributes["state_class"] == SensorStateClass.MEASUREMENT
     assert power.attributes["unit_of_measurement"] == "W"
 
-    energy = hass.states.get("sensor.garage_energy")
+    energy = hass.states.get("sensor.garage_energy_last_minute")
     assert energy is not None
     assert float(energy.state) == pytest.approx(0.12)
-    assert energy.attributes["device_class"] == "energy"
-    # Per reconciliation: energy is a per-1-minute bucket reading, NOT a lifetime counter.
-    # MEASUREMENT is the correct semantic even though HA warns that ENERGY typically uses
-    # TOTAL_INCREASING; a Riemann-sum/utility_meter helper can produce a lifetime total.
+    # No device_class: HA forbids ENERGY+MEASUREMENT, so device_class is absent.
+    assert energy.attributes.get("device_class") is None
     assert energy.attributes["state_class"] == SensorStateClass.MEASUREMENT
     assert energy.attributes["state_class"] != SensorStateClass.TOTAL_INCREASING
     assert energy.attributes["unit_of_measurement"] == "kWh"

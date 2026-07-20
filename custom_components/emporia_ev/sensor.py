@@ -57,21 +57,17 @@ class EmporiaPowerSensor(EmporiaBaseEntity, SensorEntity):
 
 
 class EmporiaEnergySensor(EmporiaBaseEntity, SensorEntity):
-    """Charging energy for the last 1-minute bucket (kWh).
+    """Per-1-minute kWh bucket — plain MEASUREMENT sensor, NO device_class.
 
-    Uses SensorStateClass.MEASUREMENT because the coordinator exposes the kWh
-    consumed in the most recent 1-minute energy window — NOT a lifetime
-    monotonic counter. This value resets every minute and can be zero between
-    polling cycles, so TOTAL_INCREASING would produce incorrect statistics.
-
-    To accumulate a lifetime session total in the Energy dashboard, configure
-    a Riemann-sum integration helper (entity: this sensor, method: left,
-    unit_time: hours) or a utility_meter. See docs/energy-dashboard.md.
+    HA forbids device_class=ENERGY with state_class=MEASUREMENT (ENERGY requires
+    TOTAL or TOTAL_INCREASING). This sensor reports the kWh consumed in the most
+    recent 1-minute window, which resets each minute and is not monotonic, so
+    TOTAL_INCREASING would be wrong. The Energy-dashboard lifetime total should
+    be derived from a Riemann-sum helper on the POWER sensor instead.
     """
 
     _attr_translation_key = KEY_ENERGY
-    _attr_name = "Energy"
-    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_name = "Energy (last minute)"
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_state_class = SensorStateClass.MEASUREMENT
 
