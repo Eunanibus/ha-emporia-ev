@@ -194,7 +194,7 @@ class EmporiaClient:
                         retry_after=_parse_retry_after(resp.headers),
                     )
                 resp.raise_for_status()
-                if resp.content_length == 0:
+                if resp.status == 204 or not resp.content_length:
                     return {}
                 return await resp.json()  # type: ignore[no-any-return]
         except (AuthError, RateLimitError):

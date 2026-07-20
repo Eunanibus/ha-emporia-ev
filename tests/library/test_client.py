@@ -39,6 +39,19 @@ from custom_components.emporia_ev.client.models import Charger, ChargerStatus
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
+
+def _content_length_header(payload: dict) -> dict:  # type: ignore[type-arg]
+    """Return a headers dict with Content-Length set for the given payload.
+
+    aioresponses doesn't set Content-Length by default, so all responses
+    have content_length=None. For 200 responses with actual bodies, we need
+    to explicitly set the header so the guard `if not resp.content_length`
+    can distinguish between empty (None/0) and present bodies.
+    """
+    body_bytes = json.dumps(payload).encode("utf-8")
+    return {"Content-Length": str(len(body_bytes))}
+
+
 # Real fixture values (verified from committed fixtures 2026-07-20)
 _DEVICE_GID = "1111111111"
 _CUSTOMER_GID = "1111111111"  # customerGid at top level of devices.json
@@ -86,13 +99,15 @@ def _session() -> aiohttp.ClientSession:
 @pytest.mark.asyncio
 async def test_get_chargers_parses_device_list_and_sets_account_id() -> None:
     """async_get_chargers returns Charger list and sets account_id from customerGid."""
+    payload = _load("devices.json")
     async with _session() as session:
         client = EmporiaClient(session, _stub_auth())
         with aioresponses() as mocked:
             mocked.get(
                 f"{BASE_URL}/customers/devices",
                 status=200,
-                payload=_load("devices.json"),
+                payload=payload,
+                headers=_content_length_header(payload),
             )
             chargers = await client.async_get_chargers()
 
@@ -111,13 +126,15 @@ async def test_get_chargers_parses_device_list_and_sets_account_id() -> None:
 @pytest.mark.asyncio
 async def test_get_charger_status_keyed_by_str_device_gid() -> None:
     """async_get_charger_status returns dict[str, ChargerStatus] from evChargers[]."""
+    payload = _load("device_status.json")
     async with _session() as session:
         client = EmporiaClient(session, _stub_auth())
         with aioresponses() as mocked:
             mocked.get(
                 f"{BASE_URL}/customers/devices/status",
                 status=200,
-                payload=_load("device_status.json"),
+                payload=payload,
+                headers=_content_length_header(payload),
             )
             status = await client.async_get_charger_status()
 
@@ -143,13 +160,15 @@ async def test_get_vehicles_returns_empty_when_no_car_connected() -> None:
     sub-dict on the evChargers entry — Vehicle.from_device returns None for
     each entry, so the result is an empty dict.
     """
+    payload = _load("device_status.json")
     async with _session() as session:
         client = EmporiaClient(session, _stub_auth())
         with aioresponses() as mocked:
             mocked.get(
                 f"{BASE_URL}/customers/devices/status",
                 status=200,
-                payload=_load("device_status.json"),
+                payload=payload,
+                headers=_content_length_header(payload),
             )
             vehicles = await client.async_get_vehicles()
 
@@ -180,10 +199,16 @@ async def test_get_energy_parses_usage_1min_fixture() -> None:
         f"&energyUnit=KilowattHours"
     )
 
+    payload = _load("usage_1min.json")
     async with _session() as session:
         client = EmporiaClient(session, _stub_auth())
         with aioresponses() as mocked:
-            mocked.get(expected_url, status=200, payload=_load("usage_1min.json"))
+            mocked.get(
+                expected_url,
+                status=200,
+                payload=payload,
+                headers=_content_length_header(payload),
+            )
             result = await client.async_get_energy([_DEVICE_GID], instant=instant)
 
     # usage_1min.json channelUsages[0].usage is 0.0
@@ -210,6 +235,7 @@ async def test_set_charger_puts_expected_payload() -> None:
                 f"{BASE_URL}/devices/evcharger",
                 status=200,
                 payload={},
+                headers=_content_length_header({}),
                 callback=_capture_body,
             )
             await client.async_set_charger("42", enabled=True, charge_rate_amps=32)
@@ -217,6 +243,28 @@ async def test_set_charger_puts_expected_payload() -> None:
     assert captured.get("chargerOn") is True
     assert captured.get("chargingRate") == 32
     assert captured.get("deviceGid") == 42
+
+
+@pytest.mark.asyncio
+async def test_set_charger_succeeds_with_204_no_content() -> None:
+    """async_set_charger succeeds when PUT returns HTTP 204 with no body.
+
+    HTTP 204 No Content has no response body and content_length may be None
+    (not 0) for chunked responses. The _request method must handle both
+    status==204 and falsy content_length to avoid calling resp.json() and
+    raising.
+    """
+    async with _session() as session:
+        client = EmporiaClient(session, _stub_auth())
+        with aioresponses() as mocked:
+            mocked.put(
+                f"{BASE_URL}/devices/evcharger",
+                status=204,
+            )
+            # Should complete without raising
+            result = await client.async_set_charger("42", enabled=True, charge_rate_amps=32)
+
+    assert result is None
 
 
 # ---------------------------------------------------------------------------
