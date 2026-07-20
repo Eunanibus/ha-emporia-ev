@@ -16,6 +16,7 @@ Key design notes (from live capture, 2026-07-20):
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import aiohttp
@@ -25,6 +26,14 @@ from .errors import AuthError, EmporiaConnectionError, RateLimitError
 from .models import Charger, ChargerStatus, Vehicle
 
 BASE_URL = "https://api.emporiaenergy.com"
+
+# Bounded retry for TRANSIENT connection blips (flaky DNS/IPv6 to the Emporia
+# cloud). A momentary connect failure is retried a couple of times with short
+# backoff so it never surfaces as a hard error — e.g. so the first poll after
+# setup doesn't trip HA's "Failed setup, will retry" banner. Auth (401) and
+# rate-limit (429) errors are NOT retried here; they surface immediately.
+_MAX_REQUEST_ATTEMPTS = 3
+_RETRY_BACKOFF_SECONDS = 1.0
 
 
 def _parse_retry_after(headers: Any) -> float | None:
@@ -201,6 +210,31 @@ class EmporiaClient:
         await self._request("PUT", "devices/evcharger", json=body)
 
     async def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Authenticated request with bounded retry on transient connection blips.
+
+        Retries only ``EmporiaConnectionError`` (flaky DNS/IPv6 to the cloud) up
+        to ``_MAX_REQUEST_ATTEMPTS`` with linear backoff, so a momentary connect
+        failure never surfaces as a hard error (e.g. so the first poll after
+        setup doesn't trip HA's "Failed setup, will retry" banner or leave an
+        ``unavailable`` entry in the log). ``AuthError`` and ``RateLimitError``
+        propagate immediately without retry.
+        """
+        for attempt in range(_MAX_REQUEST_ATTEMPTS):
+            try:
+                return await self._request_once(method, path, json=json)
+            except EmporiaConnectionError:
+                if attempt == _MAX_REQUEST_ATTEMPTS - 1:
+                    raise
+                await asyncio.sleep(_RETRY_BACKOFF_SECONDS * (attempt + 1))
+        raise EmporiaConnectionError(f"{method} {path} exhausted retries")
+
+    async def _request_once(
         self,
         method: str,
         path: str,

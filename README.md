@@ -8,11 +8,12 @@ draw and status, and wire everything into your automations.
 > connects to `api.emporiaenergy.com` using the same AWS Cognito credentials
 > as the official app. A working internet connection is required.
 
+![Emporia EV Charger device page in Home Assistant — Controls (Charging), Sensors (Energy, Plugged in, Power, Status), Charge rate slider, and Activity feed](docs/images/device-page.png)
+
 ---
 
 ## Contents
 
-- [Screenshots](#screenshots)
 - [Requirements](#requirements)
 - [Installation (HACS)](#installation-hacs)
 - [Configuration](#configuration)
@@ -23,19 +24,6 @@ draw and status, and wire everything into your automations.
 - [Reauthorisation](#reauthorisation)
 - [Multiple accounts](#multiple-accounts)
 - [Troubleshooting](#troubleshooting)
-
----
-
-## Screenshots
-
-Each charger appears as its own device with controls, sensors, and an activity
-history:
-
-![Emporia EV Charger device page in Home Assistant — Controls (Charging), Sensors (Energy, Plugged in, Power, Status), Charge rate slider, and Activity feed](docs/images/device-page.png)
-
-Polling and charging behaviour are configurable from the integration's options:
-
-![Emporia EV Charger options dialog — adaptive polling toggle, idle and charging poll intervals, and default charge rate](docs/images/options.png)
 
 ---
 

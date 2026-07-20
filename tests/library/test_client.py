@@ -358,3 +358,69 @@ async def test_timeout_maps_to_connectionerror() -> None:
             )
             with pytest.raises(EmporiaConnectionError):
                 await client.async_get_charger_status()
+
+
+# ---------------------------------------------------------------------------
+# Transient-connection retry (_request bounded retry)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_request_retries_transient_then_succeeds(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """A transient connection blip on the first attempt is retried and succeeds.
+
+    Simulates flaky DNS/IPv6: the first GET fails at the transport layer, the
+    second returns the real payload. async_get_charger_status must succeed
+    without surfacing an error (so the first poll never trips 'Failed setup').
+    """
+    # Keep the test instant: no real backoff sleep.
+    monkeypatch.setattr(
+        "custom_components.emporia_ev.client.client.asyncio.sleep",
+        AsyncMock(return_value=None),
+    )
+    payload = _load("device_status.json")
+    async with _session() as session:
+        client = EmporiaClient(session, _stub_auth())
+        with aioresponses() as mocked:
+            # 1st attempt: transport failure. 2nd attempt: success.
+            mocked.get(f"{BASE_URL}/customers/devices/status", exception=TimeoutError())
+            mocked.get(
+                f"{BASE_URL}/customers/devices/status",
+                status=200,
+                payload=payload,
+                headers=_content_length_header(payload),
+            )
+            status = await client.async_get_charger_status()
+    assert "1111111111" in status  # recovered on retry
+
+
+@pytest.mark.asyncio
+async def test_request_exhausts_retries_raises_connection_error(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """If every attempt fails transiently, the connection error finally surfaces."""
+    monkeypatch.setattr(
+        "custom_components.emporia_ev.client.client.asyncio.sleep",
+        AsyncMock(return_value=None),
+    )
+    async with _session() as session:
+        client = EmporiaClient(session, _stub_auth())
+        with aioresponses() as mocked:
+            for _ in range(3):  # _MAX_REQUEST_ATTEMPTS
+                mocked.get(f"{BASE_URL}/customers/devices/status", exception=TimeoutError())
+            with pytest.raises(EmporiaConnectionError):
+                await client.async_get_charger_status()
+
+
+@pytest.mark.asyncio
+async def test_request_does_not_retry_auth_error(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """A 401 surfaces immediately as AuthError — it is NOT retried."""
+    sleep_mock = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        "custom_components.emporia_ev.client.client.asyncio.sleep", sleep_mock
+    )
+    async with _session() as session:
+        client = EmporiaClient(session, _stub_auth())
+        with aioresponses() as mocked:
+            mocked.get(f"{BASE_URL}/customers/devices/status", status=401)
+            with pytest.raises(AuthError):
+                await client.async_get_charger_status()
+    sleep_mock.assert_not_called()  # no retry backoff happened
