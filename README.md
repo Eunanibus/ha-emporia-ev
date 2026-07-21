@@ -14,6 +14,7 @@ draw and status, and wire everything into your automations.
 
 ## Contents
 
+- [Features](#features)
 - [Requirements](#requirements)
 - [Installation (HACS)](#installation-hacs)
 - [Configuration](#configuration)
@@ -24,6 +25,22 @@ draw and status, and wire everything into your automations.
 - [Reauthorisation](#reauthorisation)
 - [Multiple accounts](#multiple-accounts)
 - [Troubleshooting](#troubleshooting)
+- [Links](#links)
+
+---
+
+## Features
+
+|     | Feature                                                                                     |
+| --- | ------------------------------------------------------------------------------------------- |
+| 🔌  | **One login → all chargers** auto-discovered, each as its own device                        |
+| 🎛️  | **Charging switch** — start/stop, optimistic (responds instantly)                           |
+| 🎚️  | **Charge-rate slider** — amperage, min/max read from the charger                            |
+| 📊  | **Power / Energy / Status** sensors + a **Plugged-in** binary sensor                        |
+| 🚗  | **Vehicle battery** sensor when a vehicle is linked in the Emporia app                      |
+| 🔁  | **Adaptive polling** — faster while charging, relaxes when idle (configurable)              |
+| 🔐  | **Reauth-in-place** on token expiry; refresh token persisted across restarts                |
+| ⚡  | **Async throughout** — one batched cloud call per poll cycle, with retry on transient blips |
 
 ---
 
@@ -260,10 +277,14 @@ an issue on GitHub with the raw status value from the integration diagnostics.
 
 ---
 
-## Contributing / Issues
+## Links
 
-Report bugs and feature requests at
-[github.com/Eunanibus/ha-emporia-ev/issues](https://github.com/Eunanibus/ha-emporia-ev/issues).
+|     |                                                                                    |
+| --- | ---------------------------------------------------------------------------------- |
+| 📂  | **Repo:** <https://github.com/Eunanibus/ha-emporia-ev>                             |
+| 🐛  | **Issues / feature requests:** <https://github.com/Eunanibus/ha-emporia-ev/issues> |
+| 📦  | **Latest release:** <https://github.com/Eunanibus/ha-emporia-ev/releases/latest>   |
+
 Pull requests welcome.
 
 ---
