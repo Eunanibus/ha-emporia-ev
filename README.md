@@ -16,7 +16,7 @@ draw and status, and wire everything into your automations.
 
 - [Features](#features)
 - [Requirements](#requirements)
-- [Installation (HACS)](#installation-hacs)
+- [Installation (HACS)](#-installation-hacs)
 - [Configuration](#configuration)
 - [Entities](#entities)
 - [Options](#options)
@@ -31,16 +31,14 @@ draw and status, and wire everything into your automations.
 
 ## Features
 
-|     | Feature                                                                                     |
-| --- | ------------------------------------------------------------------------------------------- |
-| 🔌  | **One login → all chargers** auto-discovered, each as its own device                        |
-| 🎛️  | **Charging switch** — start/stop, optimistic (responds instantly)                           |
-| 🎚️  | **Charge-rate slider** — amperage, min/max read from the charger                            |
-| 📊  | **Power / Energy / Status** sensors + a **Plugged-in** binary sensor                        |
-| 🚗  | **Vehicle battery** sensor when a vehicle is linked in the Emporia app                      |
-| 🔁  | **Adaptive polling** — faster while charging, relaxes when idle (configurable)              |
-| 🔐  | **Reauth-in-place** on token expiry; refresh token persisted across restarts                |
-| ⚡  | **Async throughout** — one batched cloud call per poll cycle, with retry on transient blips |
+- 🔌 **One login → all chargers** auto-discovered, each as its own device
+- 🎛️ **Charging switch** — start/stop, optimistic (responds instantly)
+- 🎚️ **Charge-rate slider** — amperage, min/max read from the charger
+- 📊 **Power / Energy / Status** sensors + a **Plugged-in** binary sensor
+- 🚗 **Vehicle battery** sensor when a vehicle is linked in the Emporia app
+- 🔁 **Adaptive polling** — faster while charging, relaxes when idle (configurable)
+- 🔐 **Reauth-in-place** on token expiry; refresh token persisted across restarts
+- ⚡ **Async throughout** — one batched cloud call per poll cycle, with retry on transient blips
 
 ---
 
@@ -52,7 +50,7 @@ draw and status, and wire everything into your automations.
 
 ---
 
-## Installation (HACS)
+## 📦 Installation (HACS)
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Eunanibus&repository=ha-emporia-ev&category=integration)
 
