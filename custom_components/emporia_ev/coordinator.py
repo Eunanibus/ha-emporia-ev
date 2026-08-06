@@ -66,6 +66,7 @@ class EmporiaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, ChargerStatus
         self.vehicles: dict[str, Vehicle] = {}
         self._non_charging_polls: int = 0
         self._consecutive_failures: int = 0
+        self._warned_no_chargers: bool = False
         super().__init__(
             hass,
             _LOGGER,
@@ -105,6 +106,12 @@ class EmporiaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, ChargerStatus
             # If a new charger appeared, refresh the device list.
             if any(cid not in self.chargers for cid in status):
                 await self._async_refresh_chargers()
+                # Still missing after a refresh? The status endpoint knows about a
+                # charger the device list doesn't return. Synthesize its identity
+                # from the status payload so it gets entities — otherwise its
+                # telemetry shows up in diagnostics/debug logs but is unreachable
+                # from the UI, with no entity to read it (GitHub issue #1).
+                self._add_status_only_chargers(status)
 
             # Fetch energy for the 1-min bucket and merge into status objects.
             energy: dict[str, float] = await self.client.async_get_energy(
@@ -160,10 +167,53 @@ class EmporiaDataUpdateCoordinator(DataUpdateCoordinator[dict[str, ChargerStatus
     # ------------------------------------------------------------------
 
     async def _async_refresh_chargers(self) -> None:
-        """Refresh device list and vehicles from the API."""
+        """Refresh device list and vehicles from the API.
+
+        Logs a warning when the account exposes no EV chargers. Without it, an
+        empty device list looks identical to a healthy setup — the entry loads,
+        no error is raised, and the user simply sees no entities with nothing in
+        the log to explain why (GitHub issue #1).
+        """
         chargers = await self.client.async_get_chargers()
         self.chargers = {c.id: c for c in chargers}
+        if not self.chargers:
+            # Warn once, not on every cycle: _async_update_data re-runs this
+            # refresh on each poll while the list is empty, which would spam
+            # the log roughly every 30 s indefinitely.
+            if not self._warned_no_chargers:
+                self._warned_no_chargers = True
+                _LOGGER.warning(
+                    "Emporia account %s reports no EV chargers; no entities will be created. "
+                    "If you do own an Emporia EV charger, please report this with debug logs "
+                    "enabled for %s",
+                    self.client.account_id,
+                    DOMAIN,
+                )
+        else:
+            # Reset so a later disappearance is reported again.
+            self._warned_no_chargers = False
         self.vehicles = await self.client.async_get_vehicles()
+
+    def _add_status_only_chargers(self, status: dict[str, ChargerStatus]) -> None:
+        """Create identities for chargers seen in status but not in the device list.
+
+        Entity creation is gated on ``self.chargers`` (see ``dynamic.py``), so a
+        charger missing from ``customers/devices`` would otherwise have live
+        telemetry in ``self.data`` and no entities to expose it. Identity is
+        built from the raw status object the client cached for this charger,
+        falling back to the device gid for name/serial.
+        """
+        for cid in status:
+            if cid in self.chargers:
+                continue
+            raw = self.client.raw_charger(cid) or {"deviceGid": cid}
+            self.chargers[cid] = Charger.from_device(raw)
+            _LOGGER.warning(
+                "Charger %s is reported by the status endpoint but missing from the "
+                "device list; creating entities from status data only. Device name and "
+                "model may be incomplete.",
+                cid,
+            )
 
     def _apply_adaptive_interval(self, status: dict[str, ChargerStatus]) -> None:
         """Adjust the poll interval based on charging state (with hysteresis).

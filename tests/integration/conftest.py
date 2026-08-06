@@ -80,6 +80,10 @@ def mock_client() -> MagicMock:
     client.async_get_vehicles = AsyncMock(return_value={})
     client.async_get_energy = AsyncMock(return_value={"chg-1": 0.0})
     client.async_set_charger = AsyncMock(return_value=None)
+    # raw_charger is SYNC on the real client and returns dict | None. Without an
+    # explicit spec MagicMock would hand back a MagicMock, which silently fails
+    # to model the real contract.
+    client.raw_charger = MagicMock(return_value=None)
     return client
 
 

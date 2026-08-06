@@ -74,6 +74,107 @@ async def test_first_refresh_stores_status_dict(
     mock_client.async_get_charger_status.assert_awaited_once()
 
 
+async def test_empty_charger_list_is_logged_as_warning(
+    hass: HomeAssistant,
+    mock_client,
+    mock_config_entry,
+    caplog,
+) -> None:
+    """An account with no chargers must log a warning, not fail silently.
+
+    Regression for GitHub issue #1 ("doesn't authenticate or fail"): when no
+    chargers are discovered, setup previously succeeded with zero entities and
+    no diagnostic, leaving the user with nothing to look at and no explanation.
+    """
+    mock_client.async_get_chargers.return_value = []
+    mock_client.async_get_charger_status.return_value = {}
+    mock_client.async_get_energy.return_value = {}
+
+    coordinator = await _make_coordinator(hass, mock_config_entry, mock_client)
+
+    assert coordinator.data == {}
+    assert "no ev chargers" in caplog.text.lower(), (
+        "an empty charger list must be surfaced in the log, not silently ignored"
+    )
+
+
+async def test_status_only_charger_still_gets_entities(
+    hass: HomeAssistant,
+    mock_client,
+    mock_config_entry,
+    caplog,
+) -> None:
+    """A charger present in status but absent from the device list must be usable.
+
+    Regression for GitHub issue #1: users saw live telemetry in the debug /
+    diagnostics dump ("turning on debug exposes variables ... but they are
+    inaccessible otherwise") while no entities existed, because entity creation
+    is gated on coordinator.chargers. If status reports a charger the device
+    list doesn't, synthesize its identity so the data is actually reachable.
+    """
+    mock_client.async_get_chargers.return_value = []  # device list misses it
+    mock_client.async_get_charger_status.return_value = {
+        "577944": make_status(charging_state="not_plugged_in")
+    }
+    mock_client.async_get_energy.return_value = {"577944": 0.0}
+
+    coordinator = await _make_coordinator(hass, mock_config_entry, mock_client)
+
+    assert "577944" in coordinator.data, "status telemetry must be retained"
+    assert "577944" in coordinator.chargers, (
+        "a status-only charger must be synthesized into coordinator.chargers, "
+        "otherwise its telemetry is visible in diagnostics but has no entities"
+    )
+    synthesized = coordinator.chargers["577944"]
+    assert synthesized.id == "577944"
+    assert synthesized.serial, "synthesized charger needs a serial for a stable unique_id"
+
+
+async def test_status_only_charger_warns_only_once_across_polls(
+    hass: HomeAssistant,
+    mock_client,
+    mock_config_entry,
+    caplog,
+) -> None:
+    """The status-only-charger warning must not repeat on every poll."""
+    mock_client.async_get_chargers.return_value = []
+    mock_client.async_get_charger_status.return_value = {"577944": make_status()}
+    mock_client.async_get_energy.return_value = {"577944": 0.0}
+
+    coordinator = await _make_coordinator(hass, mock_config_entry, mock_client)
+    for _ in range(4):
+        await coordinator.async_refresh()
+
+    warnings = [
+        r for r in caplog.records if r.levelname == "WARNING" and "missing from the" in r.msg
+    ]
+    assert len(warnings) == 1, f"expected exactly 1 warning across 5 polls, got {len(warnings)}"
+
+
+async def test_empty_charger_list_warns_only_once(
+    hass: HomeAssistant,
+    mock_client,
+    mock_config_entry,
+    caplog,
+) -> None:
+    """The no-chargers warning must not repeat on every poll cycle.
+
+    _async_update_data re-runs the device refresh on every cycle while the
+    charger list is empty, so an unguarded warning would spam the log roughly
+    every 30 seconds forever.
+    """
+    mock_client.async_get_chargers.return_value = []
+    mock_client.async_get_charger_status.return_value = {}
+    mock_client.async_get_energy.return_value = {}
+
+    coordinator = await _make_coordinator(hass, mock_config_entry, mock_client)
+    for _ in range(4):
+        await coordinator.async_refresh()
+
+    warnings = [r for r in caplog.records if r.levelname == "WARNING" and "no EV chargers" in r.msg]
+    assert len(warnings) == 1, f"expected exactly 1 warning across 5 polls, got {len(warnings)}"
+
+
 # ---------------------------------------------------------------------------
 # Energy merge
 # ---------------------------------------------------------------------------
