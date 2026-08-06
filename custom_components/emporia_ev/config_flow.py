@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import logging
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
@@ -11,7 +12,13 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import voluptuous as vol
 
-from .client import AuthError, EmporiaAuth, EmporiaClient, EmporiaConnectionError
+from .client import (
+    AuthError,
+    EmporiaAuth,
+    EmporiaClient,
+    EmporiaConnectionError,
+    EmporiaError,
+)
 from .const import (
     CONF_ADAPTIVE,
     CONF_CHARGING_INTERVAL,
@@ -26,18 +33,31 @@ from .const import (
     DOMAIN,
 )
 
+_LOGGER = logging.getLogger(__name__)
+
 USER_SCHEMA = vol.Schema({vol.Required(CONF_USERNAME): str, vol.Required(CONF_PASSWORD): str})
 
 
 async def async_validate_login(
     hass: HomeAssistant, username: str, password: str
 ) -> tuple[str, str | None]:
-    """Validate credentials; return (account_id, refresh_token). Raises client errors."""
+    """Validate credentials; return (account_id, refresh_token).
+
+    Raises:
+        AuthError: Credentials were rejected.
+        EmporiaConnectionError: The Emporia cloud was unreachable.
+        EmporiaError: Login worked but no account id could be resolved. Never
+            return a None account_id — it is used as the config-entry unique_id,
+            and letting it through created an entry titled "Emporia (None)" with
+            no entities (GitHub issue #1).
+    """
     session = async_get_clientsession(hass)
     auth = EmporiaAuth(session, username=username, password=password)
     client = EmporiaClient(session, auth)
     await client.authenticate()
-    return client.account_id, auth.refresh_token  # type: ignore[return-value]
+    if not client.account_id:
+        raise EmporiaError("Emporia API returned no account id (customerGid)")
+    return client.account_id, auth.refresh_token
 
 
 class EmporiaConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -59,6 +79,10 @@ class EmporiaConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "invalid_auth"
             except EmporiaConnectionError:
                 errors["base"] = "cannot_connect"
+            # Must stay AFTER the two branches above: both subclass EmporiaError.
+            except EmporiaError:
+                _LOGGER.exception("Unexpected Emporia error during setup")
+                errors["base"] = "unknown"
             else:
                 await self.async_set_unique_id(account_id)
                 self._abort_if_unique_id_configured()
@@ -92,6 +116,10 @@ class EmporiaConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "invalid_auth"
             except EmporiaConnectionError:
                 errors["base"] = "cannot_connect"
+            # Must stay AFTER the two branches above: both subclass EmporiaError.
+            except EmporiaError:
+                _LOGGER.exception("Unexpected Emporia error during re-authentication")
+                errors["base"] = "unknown"
             else:
                 if account_id != self._reauth_entry.unique_id:
                     return self.async_abort(reason="wrong_account")

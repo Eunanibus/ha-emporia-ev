@@ -94,6 +94,52 @@ async def test_user_flow_cannot_connect(hass: HomeAssistant) -> None:
     assert result["errors"] == {"base": "cannot_connect"}
 
 
+async def test_user_flow_unknown_error_shows_form_not_broken_entry(hass: HomeAssistant) -> None:
+    """A non-auth, non-connection EmporiaError must show an error, not create an entry.
+
+    Regression for GitHub issue #1: the flow only caught AuthError and
+    EmporiaConnectionError. Any other failure escaped as an unhandled exception
+    or (when account_id was silently None) created a useless entry titled
+    "Emporia (None)" with no entities. The user must get actionable feedback.
+    """
+    from custom_components.emporia_ev.client import EmporiaError
+
+    client, auth = _patched_client()
+    client.authenticate.side_effect = EmporiaError("no customerGid in payload")
+    with (
+        patch(_PATCH_SESSION, return_value=MagicMock()),
+        patch("custom_components.emporia_ev.config_flow.EmporiaAuth", return_value=auth),
+        patch("custom_components.emporia_ev.config_flow.EmporiaClient", return_value=client),
+    ):
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"username": "user@example.com", "password": "anything"}
+        )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "unknown"}
+
+
+async def test_user_flow_rejects_missing_account_id(hass: HomeAssistant) -> None:
+    """The flow must never create an entry when account_id is None.
+
+    Direct guard against the reported "Created configuration for Emporia (None)":
+    even if authenticate() succeeds, a None account_id cannot serve as a stable
+    unique_id, so the flow must show an error instead of creating the entry.
+    """
+    client, auth = _patched_client(account_id=None)  # type: ignore[arg-type]
+    with (
+        patch(_PATCH_SESSION, return_value=MagicMock()),
+        patch("custom_components.emporia_ev.config_flow.EmporiaAuth", return_value=auth),
+        patch("custom_components.emporia_ev.config_flow.EmporiaClient", return_value=client),
+    ):
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"username": "user@example.com", "password": "hunter2"}
+        )
+    assert result["type"] is FlowResultType.FORM, "must not create an 'Emporia (None)' entry"
+    assert result["errors"] == {"base": "unknown"}
+
+
 async def test_duplicate_account_aborts(hass: HomeAssistant) -> None:
     existing = MockConfigEntry(domain=DOMAIN, unique_id="acct-42")
     existing.add_to_hass(hass)
