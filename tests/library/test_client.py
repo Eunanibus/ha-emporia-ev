@@ -21,11 +21,13 @@ leak that fails the pytest-homeassistant-custom-component cleanup check.
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
+from aiohttp import web
 from aioresponses import aioresponses
 import pytest
 
@@ -33,6 +35,7 @@ from custom_components.emporia_ev.client.client import BASE_URL, EmporiaClient
 from custom_components.emporia_ev.client.errors import (
     AuthError,
     EmporiaConnectionError,
+    EmporiaError,
     RateLimitError,
 )
 from custom_components.emporia_ev.client.models import Charger, ChargerStatus
@@ -392,6 +395,169 @@ async def test_request_retries_transient_then_succeeds(monkeypatch) -> None:  # 
             )
             status = await client.async_get_charger_status()
     assert "1111111111" in status  # recovered on retry
+
+
+# ---------------------------------------------------------------------------
+# Response framing (regression: GitHub issue #1)
+#
+# These tests run against a REAL aiohttp server rather than aioresponses,
+# because the bug is in how the client interprets HTTP *framing* — a body
+# delivered with chunked transfer-encoding and therefore no Content-Length
+# header. aioresponses fabricates responses in-process and can't reproduce
+# real chunked framing, so only a live socket proves the behaviour.
+# ---------------------------------------------------------------------------
+
+
+def _chunked_json_handler(body: dict):  # type: ignore[type-arg,no-untyped-def]
+    """Return a handler serving ``body`` as JSON with chunked encoding.
+
+    Chunked responses carry NO Content-Length header, so
+    ``resp.content_length`` is None even though the body is a full payload.
+    This is how real CDN/load-balancer-fronted APIs stream JSON.
+    """
+
+    async def _handler(request: web.Request) -> web.StreamResponse:
+        resp = web.StreamResponse(status=200, headers={"Content-Type": "application/json"})
+        resp.enable_chunked_encoding()
+        await resp.prepare(request)
+        await resp.write(json.dumps(body).encode())
+        await resp.write_eof()
+        return resp
+
+    return _handler
+
+
+@asynccontextmanager
+async def _chunked_server(routes: dict[str, dict]):  # type: ignore[type-arg,no-untyped-def]
+    """Run a local aiohttp server serving ``{path: json_body}`` over chunked encoding.
+
+    Yields the base URL, e.g. ``http://127.0.0.1:54321``.
+    """
+    app = web.Application()
+    for path, body in routes.items():
+        app.router.add_get(path, _chunked_json_handler(body))
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = site._server.sockets[0].getsockname()[1]  # type: ignore[union-attr,index]
+    try:
+        yield f"http://127.0.0.1:{port}"
+    finally:
+        await runner.cleanup()
+
+
+@pytest.mark.usefixtures("socket_enabled")
+@pytest.mark.asyncio
+async def test_chunked_response_body_is_not_discarded() -> None:
+    """A chunked 200 response (no Content-Length) must be parsed, not treated as empty.
+
+    Regression for GitHub issue #1: the client guarded with
+    ``if resp.status == 204 or not resp.content_length: return {}``.
+    For chunked responses content_length is None, so a full device payload was
+    silently discarded as ``{}`` — leaving account_id None ("Emporia (None)")
+    and zero chargers, with no error raised.
+    """
+    payload = _load("devices.json")
+    async with _chunked_server({"/customers/devices": payload}) as base_url, _session() as session:
+        client = EmporiaClient(session, _stub_auth(), base_url=base_url)
+        chargers = await client.async_get_chargers()
+
+    assert client.account_id == _CUSTOMER_GID, (
+        "account_id must be parsed from a chunked response; None here reproduces "
+        "the 'Created configuration for Emporia (None)' symptom"
+    )
+    assert chargers, "chunked device payload must yield chargers, not an empty list"
+
+
+@pytest.mark.usefixtures("socket_enabled")
+@pytest.mark.asyncio
+async def test_chunked_status_response_yields_charger_status() -> None:
+    """Chunked status payload must produce ChargerStatus entries, not {}.
+
+    An empty status dict is why no entities were created in issue #1.
+    """
+    payload = _load("device_status.json")
+    async with (
+        _chunked_server({"/customers/devices/status": payload}) as base_url,
+        _session() as session,
+    ):
+        client = EmporiaClient(session, _stub_auth(), base_url=base_url)
+        status = await client.async_get_charger_status()
+
+    assert _DEVICE_GID in status, "chunked status payload must be parsed into charger entries"
+    assert status[_DEVICE_GID].charge_rate_amps == _CHARGING_RATE
+
+
+@pytest.mark.asyncio
+async def test_get_chargers_finds_chargers_nested_as_child_devices() -> None:
+    """Chargers reported as CHILD devices must be discovered, not skipped.
+
+    Regression for GitHub issue #1 (comment from stevilex9): diagnostics showed
+    ``chargers: {}`` while ``status`` carried live telemetry for the charger.
+    ``customers/devices`` nests sub-devices under ``devices[].devices[]``, so a
+    flat scan of only the top level finds nothing and no entities are created.
+    """
+    payload = {
+        "customerGid": 427246,
+        "devices": [
+            {
+                "deviceGid": 111,
+                "model": "Vue",
+                "evCharger": None,  # parent is an energy monitor, not a charger
+                "devices": [
+                    {
+                        "deviceGid": 577944,
+                        "model": "VVDN01",
+                        "manufacturerDeviceId": "CHILD-SERIAL",
+                        "locationProperties": {"deviceName": "Garage"},
+                        "evCharger": {
+                            "deviceGid": 577944,
+                            "loadGid": 1,
+                            "chargerOn": True,
+                            "chargingRate": 40,
+                            "maxChargingRate": 48,
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+    async with _session() as session:
+        client = EmporiaClient(session, _stub_auth())
+        with aioresponses() as mocked:
+            mocked.get(
+                f"{BASE_URL}/customers/devices",
+                status=200,
+                payload=payload,
+                headers=_content_length_header(payload),
+            )
+            chargers = await client.async_get_chargers()
+
+    assert [c.id for c in chargers] == ["577944"], (
+        "a charger nested as a child device must still be discovered"
+    )
+    assert chargers[0].name == "Garage"
+    assert chargers[0].serial == "CHILD-SERIAL"
+
+
+@pytest.mark.usefixtures("socket_enabled")
+@pytest.mark.asyncio
+async def test_authenticate_raises_when_account_id_cannot_be_resolved() -> None:
+    """authenticate() must fail loudly if the account id can't be determined.
+
+    Defence in depth for issue #1: credentials were accepted and an entry was
+    created titled "Emporia (None)". A missing customerGid means we cannot
+    build a stable unique_id, so it must surface as an error at the config-flow
+    boundary instead of creating a broken entry.
+    """
+    async with (
+        _chunked_server({"/customers/devices": {"devices": []}}) as base_url,
+        _session() as session,
+    ):
+        client = EmporiaClient(session, _stub_auth(), base_url=base_url)
+        with pytest.raises(EmporiaError):
+            await client.authenticate()
 
 
 @pytest.mark.asyncio

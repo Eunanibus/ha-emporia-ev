@@ -17,12 +17,13 @@ Key design notes (from live capture, 2026-07-20):
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
 from typing import Any
 
 import aiohttp
 
 from .auth import EmporiaAuth
-from .errors import AuthError, EmporiaConnectionError, RateLimitError
+from .errors import AuthError, EmporiaConnectionError, EmporiaError, RateLimitError
 from .models import Charger, ChargerStatus, Vehicle
 
 BASE_URL = "https://api.emporiaenergy.com"
@@ -54,6 +55,25 @@ def _extract_account_id(payload: dict[str, Any]) -> str | None:
     return None
 
 
+def _iter_devices(devices: Any) -> Iterator[dict[str, Any]]:
+    """Yield every device in a ``devices`` list, including nested sub-devices.
+
+    ``customers/devices`` is a TREE, not a flat list: an EV charger can be
+    reported as a child of another device (e.g. under a Vue energy monitor) via
+    a nested ``devices[]`` array. Scanning only the top level found no chargers
+    for such accounts, producing an empty charger list — and therefore zero
+    entities — even though the status endpoint returned live telemetry for that
+    same charger (GitHub issue #1).
+    """
+    if not isinstance(devices, list):
+        return
+    for device in devices:
+        if not isinstance(device, dict):
+            continue
+        yield device
+        yield from _iter_devices(device.get("devices"))
+
+
 class EmporiaClient:
     """Typed async facade over the Emporia cloud REST API."""
 
@@ -76,10 +96,32 @@ class EmporiaClient:
         self._raw_chargers: dict[str, dict[str, Any]] = {}
 
     async def authenticate(self) -> None:
-        """Ensure a valid token AND populate account_id (raises AuthError)."""
+        """Ensure a valid token AND populate account_id.
+
+        Raises:
+            AuthError: Credentials/token were rejected.
+            EmporiaError: Authentication succeeded but the account id could not
+                be resolved from the device payload. This must fail loudly:
+                account_id becomes the config-entry unique_id, and a None value
+                previously produced a titled-but-broken "Emporia (None)" entry
+                with no entities (GitHub issue #1).
+        """
         await self._auth.async_get_access_token()
         if self.account_id is None:
             await self.async_get_chargers()
+        if self.account_id is None:
+            raise EmporiaError(
+                "Authenticated, but the Emporia API returned no customerGid; "
+                "cannot identify the account"
+            )
+
+    def raw_charger(self, charger_id: str) -> dict[str, Any] | None:
+        """Return the last raw ``evChargers[]`` object for a charger, if seen.
+
+        Lets the coordinator build a charger identity from status data when the
+        device list omits that charger (GitHub issue #1).
+        """
+        return self._raw_chargers.get(charger_id)
 
     async def async_get_chargers(self) -> list[Charger]:
         """GET customers/devices → list of Charger objects.
@@ -90,7 +132,12 @@ class EmporiaClient:
         payload = await self._request("GET", "customers/devices")
         if self.account_id is None:
             self.account_id = _extract_account_id(payload)
-        return [Charger.from_device(d) for d in payload.get("devices", []) if d.get("evCharger")]
+        # Walk the whole device tree: chargers may be nested as child devices.
+        return [
+            Charger.from_device(d)
+            for d in _iter_devices(payload.get("devices"))
+            if d.get("evCharger")
+        ]
 
     async def async_get_charger_status(self) -> dict[str, ChargerStatus]:
         """GET customers/devices/status → ``{str(deviceGid): ChargerStatus}``.
@@ -249,7 +296,7 @@ class EmporiaClient:
         - Other bad status → EmporiaConnectionError (via raise_for_status)
         - ClientResponseError / ClientConnectionError → EmporiaConnectionError
         - ClientError / TimeoutError → EmporiaConnectionError
-        - Empty body (content_length == 0) → {}
+        - Genuinely empty body (204, or zero bytes read) → {}
         """
         await self._auth.async_get_access_token()
         headers = self._auth.auth_headers()
@@ -264,7 +311,17 @@ class EmporiaClient:
                         retry_after=_parse_retry_after(resp.headers),
                     )
                 resp.raise_for_status()
-                if resp.status == 204 or not resp.content_length:
+                if resp.status == 204:
+                    return {}
+                # Decide "empty" from the BODY, never from Content-Length.
+                # A chunked response (Transfer-Encoding: chunked) carries no
+                # Content-Length header at all, so resp.content_length is None
+                # even though the body is a full payload. Trusting that header
+                # silently discarded real device payloads as {} — leaving
+                # account_id None ("Emporia (None)") and zero entities, with no
+                # error raised (GitHub issue #1). read() is cached by aiohttp,
+                # so the subsequent json() call does not re-read the stream.
+                if not await resp.read():
                     return {}
                 # content_type=None: don't reject on an unexpected/absent
                 # Content-Type header (some Emporia endpoints mislabel JSON).
