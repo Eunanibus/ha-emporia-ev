@@ -1,5 +1,7 @@
 # Emporia EV Charger — Home Assistant Integration
 
+[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-%245-FFDD00?style=flat-square&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/eunanibus)
+
 A custom HACS integration that brings your Emporia Level 2 EV charger into
 Home Assistant: start and stop charging, set the charge rate, monitor power
 draw and status, and wire everything into your automations.
@@ -282,8 +284,13 @@ an issue on GitHub with the raw status value from the integration diagnostics.
 | 📂  | **Repo:** <https://github.com/Eunanibus/ha-emporia-ev>                             |
 | 🐛  | **Issues / feature requests:** <https://github.com/Eunanibus/ha-emporia-ev/issues> |
 | 📦  | **Latest release:** <https://github.com/Eunanibus/ha-emporia-ev/releases/latest>   |
+| ☕  | **Buy me a coffee:** <https://buymeacoffee.com/eunanibus>                          |
 
 Pull requests welcome.
+
+If this integration saved you some time, a $5 coffee is a lovely way to say
+thanks — entirely optional, and the integration stays free either way.
+[☕ Buy me a coffee](https://buymeacoffee.com/eunanibus)
 
 ---
 
