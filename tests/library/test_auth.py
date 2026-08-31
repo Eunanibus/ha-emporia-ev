@@ -185,3 +185,97 @@ async def test_refresh_non_dict_json_body_raises_auth_error() -> None:
             mocked.post(COGNITO_URL, status=200, payload=[1, 2, 3])
             with pytest.raises(AuthError):
                 await auth.async_refresh()
+
+
+# ---------------------------------------------------------------------------
+# Login fallback tests
+# ---------------------------------------------------------------------------
+
+_SUCCESS_BODY = {
+    "AuthenticationResult": {
+        "IdToken": "FALLBACK_ID",
+        "AccessToken": "FALLBACK_ACCESS",
+        "ExpiresIn": 3600,
+        "TokenType": "Bearer",
+    }
+}
+
+
+@pytest.mark.asyncio
+async def test_get_access_token_falls_back_to_login_when_refresh_fails() -> None:
+    """Refresh raises AuthError but username+password are present: login recovers."""
+    fake = MagicMock()
+    fake.id_token = "LOGIN_ID"
+    fake.access_token = "LOGIN_ACCESS"
+    fake.refresh_token = "NEW_RT"
+    async with _session() as session:
+        auth = EmporiaAuth(
+            session, username="u@example.com", password="pw", refresh_token="EXPIRED_RT"
+        )
+        auth._access_token = "STALE"
+        auth._expires_at = time.time() - 1
+        with (
+            aioresponses() as mocked,
+            patch("custom_components.emporia_ev.client.auth.Cognito", return_value=fake),
+            patch.object(asyncio.get_running_loop(), "run_in_executor", _inline_executor),
+        ):
+            mocked.post(COGNITO_URL, status=400, payload={"__type": "NotAuthorizedException"})
+            token = await auth.async_get_access_token()
+    assert token == "LOGIN_ACCESS"
+
+
+@pytest.mark.asyncio
+async def test_get_access_token_propagates_auth_error_when_no_credentials() -> None:
+    """Refresh raises AuthError and no username/password: AuthError must propagate."""
+    async with _session() as session:
+        auth = EmporiaAuth(session, refresh_token="EXPIRED_RT")
+        auth._access_token = "STALE"
+        auth._expires_at = time.time() - 1
+        with aioresponses() as mocked:
+            mocked.post(COGNITO_URL, status=400, payload={"__type": "NotAuthorizedException"})
+            with pytest.raises(AuthError):
+                await auth.async_get_access_token()
+
+
+@pytest.mark.asyncio
+async def test_get_access_token_propagates_connection_error_without_attempting_login() -> None:
+    """A transport failure must propagate as EmporiaConnectionError with no login attempt."""
+    fake = MagicMock()
+    fake.id_token = "LOGIN_ID"
+    fake.access_token = "LOGIN_ACCESS"
+    fake.refresh_token = "NEW_RT"
+    async with _session() as session:
+        auth = EmporiaAuth(session, username="u@example.com", password="pw", refresh_token="RT")
+        auth._access_token = "STALE"
+        auth._expires_at = time.time() - 1
+        with (
+            aioresponses() as mocked,
+            patch("custom_components.emporia_ev.client.auth.Cognito", return_value=fake),
+            patch.object(asyncio.get_running_loop(), "run_in_executor", _inline_executor),
+        ):
+            mocked.post(COGNITO_URL, exception=aiohttp.ClientError("network down"))
+            with pytest.raises(EmporiaConnectionError):
+                await auth.async_get_access_token()
+        # Confirm login was never called (no Cognito mock interaction expected).
+        fake.authenticate.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_access_token_propagates_when_fallback_login_fails() -> None:
+    """If the fallback login itself raises AuthError, that error propagates."""
+    fake = MagicMock()
+    fake.authenticate.side_effect = Exception("invalid credentials")
+    async with _session() as session:
+        auth = EmporiaAuth(
+            session, username="u@example.com", password="wrong_pw", refresh_token="EXPIRED_RT"
+        )
+        auth._access_token = "STALE"
+        auth._expires_at = time.time() - 1
+        with (
+            aioresponses() as mocked,
+            patch("custom_components.emporia_ev.client.auth.Cognito", return_value=fake),
+            patch.object(asyncio.get_running_loop(), "run_in_executor", _inline_executor),
+        ):
+            mocked.post(COGNITO_URL, status=400, payload={"__type": "NotAuthorizedException"})
+            with pytest.raises(AuthError):
+                await auth.async_get_access_token()

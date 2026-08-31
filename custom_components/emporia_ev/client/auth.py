@@ -117,10 +117,32 @@ class EmporiaAuth:
         self._expires_at = time.time() + float(result.get("ExpiresIn", 3600))
 
     async def async_get_access_token(self) -> str:
+        """Return a valid access token, refreshing or logging in as needed.
+
+        When a refresh token is present its ``REFRESH_TOKEN_AUTH`` path is tried
+        first.  If that raises ``AuthError`` AND both a username and password are
+        stored, the method falls back to a full SRP login so that a password user
+        whose refresh token has expired re-authenticates silently rather than
+        being prompted for their password.
+
+        Only ``AuthError`` is caught for the fallback: a transport failure
+        (``EmporiaConnectionError``) propagates unchanged, because a network
+        problem is not an auth problem and the coordinator treats them differently.
+
+        The fallback does not persist the new refresh token into the config entry,
+        because this module has no Home Assistant imports.  The fallback runs again
+        after the next HA restart, which is acceptable.
+        """
         if self._access_token and time.time() < self._expires_at - _REFRESH_SKEW_SECONDS:
             return self._access_token
         if self._refresh_token:
-            await self.async_refresh()
+            try:
+                await self.async_refresh()
+            except AuthError:
+                if self._username and self._password:
+                    await self.async_login()
+                else:
+                    raise
         else:
             await self.async_login()
         assert self._access_token is not None
