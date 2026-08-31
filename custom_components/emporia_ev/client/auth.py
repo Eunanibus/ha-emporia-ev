@@ -9,6 +9,7 @@ boto3. POOL_ID / CLIENT_ID / REGION are pinned by the capture task.
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from typing import Any
 
@@ -93,10 +94,20 @@ class EmporiaAuth:
                 # Cognito replies with Content-Type application/x-amz-json-1.1;
                 # aiohttp's .json() rejects non-application/json unless we opt out
                 # of the content-type check.
-                body: dict[str, Any] = await resp.json(content_type=None)
+                try:
+                    raw = await resp.json(content_type=None)
+                except (json.JSONDecodeError, ValueError) as err:
+                    raise EmporiaConnectionError(
+                        f"token refresh returned a non-JSON body: {resp.status}"
+                    ) from err
+                if not isinstance(raw, dict):
+                    raise AuthError(
+                        f"token refresh returned an unexpected body type: {resp.status}"
+                    )
+                body: dict[str, Any] = raw
                 if resp.status != 200:
                     raise AuthError(f"token refresh rejected: {body.get('__type', resp.status)}")
-        except aiohttp.ClientError as err:
+        except (TimeoutError, aiohttp.ClientError) as err:
             raise EmporiaConnectionError(f"token refresh transport error: {err}") from err
         result = body.get("AuthenticationResult") or {}
         self._id_token = result.get("IdToken")

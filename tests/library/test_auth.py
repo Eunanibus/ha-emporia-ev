@@ -7,7 +7,7 @@ from aioresponses import aioresponses
 import pytest
 
 from custom_components.emporia_ev.client.auth import COGNITO_URL, EmporiaAuth
-from custom_components.emporia_ev.client.errors import AuthError
+from custom_components.emporia_ev.client.errors import AuthError, EmporiaConnectionError
 
 
 def _session() -> aiohttp.ClientSession:
@@ -128,6 +128,18 @@ async def test_refresh_rejected_raises_autherror() -> None:
 
 
 @pytest.mark.asyncio
+async def test_refresh_timeout_raises_connection_error() -> None:
+    """A bare TimeoutError from aiohttp must surface as EmporiaConnectionError."""
+
+    async with _session() as session:
+        auth = EmporiaAuth(session, refresh_token="RT")
+        with aioresponses() as mocked:
+            mocked.post(COGNITO_URL, exception=TimeoutError("timed out"))
+            with pytest.raises(EmporiaConnectionError):
+                await auth.async_refresh()
+
+
+@pytest.mark.asyncio
 async def test_get_access_token_refreshes_when_expired() -> None:
     body = {
         "AuthenticationResult": {
@@ -145,3 +157,31 @@ async def test_get_access_token_refreshes_when_expired() -> None:
             mocked.post(COGNITO_URL, status=200, payload=body)
             token = await auth.async_get_access_token()
         assert token == "REFRESHED_ACCESS"
+
+
+@pytest.mark.asyncio
+async def test_refresh_non_json_body_raises_connection_error() -> None:
+    """An HTML error page from a proxy must surface as EmporiaConnectionError."""
+
+    async with _session() as session:
+        auth = EmporiaAuth(session, refresh_token="RT")
+        with aioresponses() as mocked:
+            mocked.post(
+                COGNITO_URL,
+                status=503,
+                body="<html>Service Unavailable</html>",
+                content_type="text/html",
+            )
+            with pytest.raises(EmporiaConnectionError):
+                await auth.async_refresh()
+
+
+@pytest.mark.asyncio
+async def test_refresh_non_dict_json_body_raises_auth_error() -> None:
+    """A valid JSON array body must produce AuthError, not AttributeError."""
+    async with _session() as session:
+        auth = EmporiaAuth(session, refresh_token="RT")
+        with aioresponses() as mocked:
+            mocked.post(COGNITO_URL, status=200, payload=[1, 2, 3])
+            with pytest.raises(AuthError):
+                await auth.async_refresh()
