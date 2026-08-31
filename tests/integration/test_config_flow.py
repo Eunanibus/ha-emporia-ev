@@ -248,3 +248,29 @@ async def test_options_flow(hass: HomeAssistant) -> None:
     assert entry.options[CONF_IDLE_INTERVAL] == 60
     assert entry.options[CONF_ADAPTIVE] is False
     assert entry.options[CONF_DEFAULT_AMPS] == 40
+
+
+async def test_reauth_confirm_passes_username_placeholder(hass: HomeAssistant) -> None:
+    """strings.json interpolates {username}; without description_placeholders the user
+    sees the literal token rather than the actual email address."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="acct-42",
+        data={
+            "username": "user@example.com",
+            "password": "hunter2",
+            "account_id": "acct-42",
+            "refresh_token": "old-token",
+        },
+    )
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_REAUTH, "entry_id": entry.entry_id},
+        data=entry.data,
+    )
+    assert result["step_id"] == "reauth_confirm"
+    # HA injects a 'name' key into description_placeholders on reauth flows
+    # (config_entries.py), so check the username key specifically rather than
+    # asserting dict equality.
+    assert result["description_placeholders"]["username"] == "user@example.com"

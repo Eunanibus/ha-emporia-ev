@@ -105,9 +105,9 @@ class EmporiaConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         assert self._reauth_entry is not None
+        username: str = self._reauth_entry.data[CONF_USERNAME]
         errors: dict[str, str] = {}
         if user_input is not None:
-            username = self._reauth_entry.data[CONF_USERNAME]
             try:
                 account_id, refresh_token = await async_validate_login(
                     self.hass, username, user_input[CONF_PASSWORD]
@@ -135,6 +135,7 @@ class EmporiaConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="reauth_confirm",
             data_schema=vol.Schema({vol.Required(CONF_PASSWORD): str}),
             errors=errors,
+            description_placeholders={"username": username},
         )
 
     @staticmethod

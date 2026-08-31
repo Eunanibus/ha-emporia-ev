@@ -19,8 +19,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: EmporiaConfigEntry) -> b
     session = async_get_clientsession(hass)
     auth = EmporiaAuth(
         session,
-        username=entry.data[CONF_USERNAME],
-        password=entry.data[CONF_PASSWORD],
+        username=entry.data.get(CONF_USERNAME),
+        password=entry.data.get(CONF_PASSWORD),
         refresh_token=entry.data.get("refresh_token"),
     )
     client = EmporiaClient(session, auth)

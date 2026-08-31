@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Emporia EV Charger",
-        "description": "Sign in with your Emporia app credentials.",
+        "description": "Sign in with your Emporia app credentials. Accounts created with Google or Apple sign-in are not supported.",
         "data": { "username": "Email", "password": "Password" }
       },
       "reauth_confirm": {
