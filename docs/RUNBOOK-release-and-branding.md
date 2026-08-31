@@ -1,4 +1,4 @@
-# Runbook — Release mechanism & brand iconset for a HACS custom integration
+# Runbook: Release mechanism & brand iconset for a HACS custom integration
 
 Audience: an agent or developer building a HACS custom integration similar to
 `ha-emporia-ev`. Written 2026-08-14. Everything below was verified against this
@@ -7,16 +7,14 @@ repo, the live `home-assistant/brands` repo, and a HAR capture of a real HA
 
 Replace `emporia_ev` / `Emporia EV Charger` / `Eunanibus` with your own values.
 
----
-
-## Part 1 — Brand icons (read this before you spend time on assets)
+## Part 1: Brand icons (read this before you spend time on assets)
 
 ### The one-paragraph summary
 
 Ship your icons in `custom_components/<domain>/brand/`. That makes them appear
 on **Settings → Devices & Services** and the device page on HA 2026.3+. It does
 **not** make them appear in the **HACS store / downloads list**, which still
-resolves icons via the `brands.home-assistant.io` CDN — and the CDN no longer
+resolves icons via the `brands.home-assistant.io` CDN, and the CDN no longer
 accepts new custom integrations. There is currently no way for a custom
 integration to get an icon in the HACS store view. Budget zero effort for it.
 
@@ -25,7 +23,7 @@ integration to get an icon in the HACS store view. Budget zero effort for it.
 | Date       | Event                                                                                                                                                   |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-02-24 | Brands Proxy API announced. Custom integrations can ship a local `brand/` folder. HA 2026.3.0+.                                                         |
-| 2026-03-03 | `home-assistant/brands` adds `.github/workflows/close-new-custom-integrations.yml` — **auto-closes any PR adding a new `custom_integrations/` folder**. |
+| 2026-03-03 | `home-assistant/brands` adds `.github/workflows/close-new-custom-integrations.yml`, which **auto-closes any PR adding a new `custom_integrations/` folder**. |
 | now        | `custom_integrations/` is labelled a "Legacy folder" in the brands README.                                                                              |
 
 ### Do NOT open a PR against home-assistant/brands
@@ -56,10 +54,10 @@ None is a pure addition: a move reports as `renamed`, and edits/removals report
 as `modified`/`removed`, so the folder lands in `existingFolders` and the bot
 passes it over. Two worked examples, both verified with `git show --name-status`:
 
-- #10958 (2026-08-13, the most recent at time of writing) — "Move Monzo assets
+- #10958 (2026-08-13, the most recent at time of writing): "Move Monzo assets
   to core integrations". All four files are `R100`, pure renames out of
   `custom_integrations/monzo/`. Nothing was added.
-- #10626 (2026-06-27) — added `custom_integrations/aten_pe/`, but as a move from
+- #10626 (2026-06-27): added `custom_integrations/aten_pe/`, but as a move from
   `core_integrations`, so the diff also deleted the originals.
 
 The last additions of genuinely new custom folders by outside contributors
@@ -74,12 +72,12 @@ agent open PRs or write maintainer replies there.
 Create `custom_components/<domain>/brand/`. No `manifest.json` change, no
 config. Local images take priority over the CDN.
 
-```
+```text
 custom_components/<domain>/brand/
 ├── icon.png          256×256      (required)
 ├── icon@2x.png       512×512
-├── logo.png          shortest side 128–256
-├── logo@2x.png       shortest side 256–512
+├── logo.png          shortest side 128-256
+├── logo@2x.png       shortest side 256-512
 ├── dark_icon.png     256×256      (ONLY if genuinely dark-optimised)
 ├── dark_icon@2x.png  512×512
 ├── dark_logo.png
@@ -90,9 +88,9 @@ Rules that matter, from the brands README spec:
 
 - **PNG only.** Transparency preferred. Interlaced/progressive preferred.
 - **Icons must be exactly 256×256 and 512×512.** 1:1 aspect ratio.
-- **Logos:** shortest side 128–256 (normal) and 256–512 (@2x). Landscape
+- **Logos:** shortest side 128-256 (normal) and 256-512 (@2x). Landscape
   preferred. Largest permitted shortest side is preferred.
-- **Trim the images.** Minimum empty space on the edges — no transparent
+- **Trim the images.** Minimum empty space on the edges, no transparent
   padding, no borders. Padding is the most common real-world defect; it renders
   your logo small and off-centre.
 - **Omit `dark_*` unless actually different.** If missing, the non-prefixed
@@ -101,7 +99,7 @@ Rules that matter, from the brands README spec:
   identical to icon.png. Please remove…"_
 - **If your logo is square, ship only the icons.** The icon is used as the logo
   fallback. Identical `icon.png`/`logo.png` is also a validator error.
-- **Don't use Home Assistant branding** — it implies your integration is official.
+- **Don't use Home Assistant branding**: it implies your integration is official.
 
 Verify your assets locally before committing:
 
@@ -133,10 +131,11 @@ Any `PADDED` line means trim it. Two matching hashes mean delete the redundant f
 | Device page                     | **Yes** | same                                                                       |
 | **HACS store / downloads list** | **No**  | HACS supplies a CDN URL over the WebSocket; CDN has no entry for you       |
 
-Evidence for the HACS row, from a real 2026.8.1 capture — worth knowing so you
-don't re-debug it:
+Evidence for the HACS row, from a real 2026.8.1 capture (worth knowing so you
+don't re-debug it):
 
 - Core's `app.js` `brandsUrl` emits **only** local paths:
+
   ```js
   MR: (e, t) => {
     if (!o) return "";
@@ -146,21 +145,23 @@ don't re-debug it:
     return (r.searchParams.set("token", o), r.toString());
   };
   ```
+
   (`o` is a WS-fetched access token; the sole `brands.home-assistant.io`
   reference in 559 KB is inside a URL _validator_, not a builder.)
+
 - HACS's own bundle contains the string `brands` **zero** times; the CDN URL
   arrives as WebSocket data and is rendered via Lit's generic attribute setter.
 - On the HACS dashboard, **28 of 31** brand requests returned the identical
-  3039-byte "icon not available" placeholder — every custom integration not
+  3039-byte "icon not available" placeholder for every custom integration not
   already in the CDN. This is the normal appearance now, not a defect in your repo.
 
-Diagnostic shortcut — is a CDN entry present at all?
+Diagnostic shortcut: is a CDN entry present at all?
 
 ```bash
 # strict URL: 404 = not in the brands CDN
 curl -o /dev/null -w '%{http_code} %{size_download}\n' \
   https://brands.home-assistant.io/<domain>/icon.png
-# /_/ URL: always 200, serves a placeholder when missing — do not trust it
+# /_/ URL: always 200, serves a placeholder when missing. Do not trust it
 curl -o /dev/null -w '%{http_code} %{size_download}\n' \
   https://brands.home-assistant.io/_/<domain>/icon.png
 ```
@@ -171,24 +172,22 @@ A ~3039-byte response from the `/_/` form is the placeholder, not your icon.
 
 Open issues on `hacs/integration`, all unresolved as of 2026-08-14:
 
-- **#5402** HA 2026.3 local branding works, but HACS still shows "Icon not available" (2026-07-20) — closest match
+- **#5402** HA 2026.3 local branding works, but HACS still shows "Icon not available" (2026-07-20). Closest match.
 - **#5223** HACS downloads panel shows "icon not available" for integrations shipping inline brand icons (2026-04-15)
 - **#5179** HACS should use the Brands Proxy API for installed custom integrations (2026-03-20)
 - **#5171** HACS dashboard doesn't show local brand icons (2026-03-17)
 
 `hacs/frontend` #936 requested this and was closed as completed 2026-04-15, but
-the symptom persists — the backend half appears to be the gap. Add a 👍 to
-#5402 rather than filing a fifth report.
+the symptom persists (the backend half appears to be the gap).
+Add a 👍 to issue `#5402` rather than filing a fifth report.
 
----
-
-## Part 2 — Release mechanism
+## Part 2: Release mechanism
 
 ### Repo layout
 
-```
+```text
 custom_components/<domain>/          # the integration (HACS ships this dir)
-├── manifest.json                    # version lives here — CI rewrites it
+├── manifest.json                    # version lives here; CI rewrites it
 ├── brand/                           # icons (Part 1)
 ├── icons.json, strings.json, translations/
 └── client/                          # bundled API client, if vendoring
@@ -217,22 +216,22 @@ with HA. Runtime libs are declared in `pyproject.toml` `[project.dependencies]`
 
 ### Three workflows
 
-**`ci.yml`** — on push to `main` + PRs. Three parallel jobs: `ruff check` +
+**`ci.yml`**: on push to `main` + PRs. Three parallel jobs: `ruff check` +
 `ruff format --check`; `mypy` (strict); `pytest`. The pytest job tolerates
-exit code 5 (no tests collected) with a warning — useful early, worth removing
+exit code 5 (no tests collected) with a warning; useful early, worth removing
 once you have tests.
 
-**`validate.yml`** — on push/PR + weekly cron (`0 6 * * 1`). Runs
+**`validate.yml`**: on push/PR + weekly cron (`0 6 * * 1`). Runs
 `home-assistant/actions/hassfest@master` and `hacs/action@main` with
 `category: integration`. The cron matters: hassfest/HACS rules change under you,
 so a repo that was green can go red without any commit.
 
-**`release.yml`** — `workflow_dispatch` only, input `version` as `X.Y.Z` (no
+**`release.yml`**: `workflow_dispatch` only, input `version` as `X.Y.Z` (no
 leading `v`). Requires `permissions: contents: write`. Three jobs:
 
-1. `gate` — validates the version format with `grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'`, then ruff + mypy + pytest.
-2. `validate` — hassfest + HACS.
-3. `release` — `needs: [gate, validate]`, so it only runs if **both** pass. It:
+1. `gate`: validates the version format with `grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'`, then ruff + mypy + pytest.
+2. `validate`: hassfest + HACS.
+3. `release`: `needs: [gate, validate]`, so it only runs if **both** pass. It:
    - fails if the tag already exists (`git rev-parse "v$VERSION"`),
    - rewrites `manifest.json`'s `version` in place with a small Python step,
    - commits as `github-actions[bot]` with `chore: release vX.Y.Z` and pushes to `main`,
@@ -242,18 +241,20 @@ Key design points to copy:
 
 - **`manifest.json` is the single source of version truth**, bumped by CI, not
   by hand. (`pyproject.toml`'s `version` is unrelated packaging metadata and
-  drifts — ours still says `0.1.0`. Harmless, but don't be confused by it.)
+  drifts (ours still says `0.1.0`). Harmless, but don't be confused by it.)
 - **Quality gate before tag.** A tag is what HACS installs; never create one
   from unvalidated code.
 - **The tag must contain the files you expect.** HACS installs a released
   version rather than the tip of `main`, so an asset committed after a tag is
   not in an install of that tag. Verify before announcing:
+
   ```bash
   git ls-tree -r --name-only vX.Y.Z -- custom_components/<domain>/brand/
   ```
+
   If a user reports a correct `brand/` folder not working, check which version
   they installed before debugging anything else. (Unverified: the exact HACS
-  download mechanics — release zip vs. tag archive vs. default branch — were
+  download mechanics (release zip vs. tag archive vs. default branch) were
   not confirmed while writing this. The ordering advice holds either way; if you
   need the precise behaviour, read the HACS docs rather than trusting this line.)
 
@@ -262,7 +263,7 @@ Key design points to copy:
 1. Merge everything to `main`; confirm CI is green.
 2. Actions → **Release** → _Run workflow_ → enter `0.2.0`.
 3. Confirm the bot's `chore: release v0.2.0` commit and the `v0.2.0` release.
-4. `git pull` locally — CI pushed a commit to `main`.
+4. `git pull` locally (CI pushed a commit to `main`).
 5. Verify the tag contains `brand/` (command above).
 
 ### Local dev loop
@@ -283,7 +284,7 @@ isort `force-sort-within-sections`; mypy `strict` + `warn_unreachable` with
 
 **A local `.venv` HA version is NOT your instance's version.** This repo's venv
 pins `homeassistant>=2024.8` and resolved to 2025.1.4 while the real instance
-ran 2026.8.1. Don't infer runtime behaviour from the venv — check the actual
+ran 2026.8.1. Don't infer runtime behaviour from the venv; check the actual
 instance.
 
 ### Fixture capture, if you talk to a cloud API
@@ -295,8 +296,6 @@ secret-bearing keys (`IdToken`, `AccessToken`, `RefreshToken`, `password`,
 with stable fakes and writes the sanitized copy to `tests/library/fixtures/`.
 **Only scrubbed output is ever committed.** Credentials come from an
 env file that must be gitignored.
-
----
 
 ## Checklist for a new integration
 
