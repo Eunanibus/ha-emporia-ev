@@ -1,4 +1,4 @@
-# Emporia API — pinned facts (from live capture 2026-07-20)
+# Emporia API: pinned facts (from live capture 2026-07-20)
 
 Captured against a real account with one charger (model **VVDN01**). Raw
 responses are gitignored (`tests/library/fixtures/raw/`); scrubbed fixtures are
@@ -22,13 +22,13 @@ committed under `tests/library/fixtures/`.
 
 Top-level object:
 
-- `customerGid` (int) — **the account id** used as the config-entry `unique_id`.
+- `customerGid` (int): **the account id** used as the config-entry `unique_id`.
 - `email`, `firstName`, `lastName`, `createdAt`.
 - `devices`: list. Each device:
   - `deviceGid` (int), `manufacturerDeviceId` (str, = serial), `model` (str,
     e.g. `VVDN01`), `firmware` (str), `locationProperties` (dict, has
     `deviceName`), `channels` (list; charger's is `channelNum` `"1,2,3"`),
-    and `evCharger` (dict) when the device is a charger — see fields below.
+    and `evCharger` (dict) when the device is a charger (see fields below).
 
 So `Charger.from_device` reads the **devices** payload: `device["deviceGid"]`,
 `device["manufacturerDeviceId"]`, `device["model"]`,
@@ -49,14 +49,14 @@ Top-level object with **separate typed lists** (NOT a `devices` list):
 - **No `minChargingRate`** → use the 6 A fallback.
 - **No power/energy fields here.**
 - **No vehicle block observed** (no car connected at capture time;
-  `icon == "CarNotConnected"`). Vehicle-battery support is best-effort / TBD —
+  `icon == "CarNotConnected"`). Vehicle-battery support is best-effort / TBD:
   capture again with a car plugged in to pin the field, or omit for v1.
 
 Observed status vocabulary (car not connected): `status="Standby"`,
 `message="Ready"`, `icon="CarNotConnected"`, `iconLabel="Ready"`,
 `chargerOn=True`, `chargingRate=40`, `maxChargingRate=40`. The `icon` field is
 the most reliable state discriminator: `CarNotConnected` ⇒ not plugged in.
-(Charging / plugged-idle icons must be pinned from a session with a car — until
+(Charging / plugged-idle icons must be pinned from a session with a car; until
 then, derive from `chargerOn` + a non-`CarNotConnected` icon.)
 
 ### `GET AppAPI?apiMethod=getDeviceListUsages&deviceGids={gid}&instant={iso}&scale={scale}&energyUnit={unit}`
@@ -64,11 +64,11 @@ then, derive from `chargerOn` + a non-`CarNotConnected` icon.)
 (fixtures: `usage_kwh.json` scale=1H, `usage_1min.json` scale=1MIN)
 
 - Valid `energyUnit`: `[KilowattHours, Dollars, AmpHours, Trees, GallonsOfGas,
-MilesDriven, Carbon, Voltage]` — **`WATTS` is NOT valid** (returns HTTP 400,
+MilesDriven, Carbon, Voltage]`. **`WATTS` is NOT valid** (returns HTTP 400,
   fixture `usage_watts.json` holds that error body).
 - Response: `deviceListUsages.devices[].channelUsages[]` each with `name`,
   `channelNum`, `percentage`, `usage` (float, **energy in the requested unit
-  over the `scale` window** — kWh here), `nestedDevices`. Match the charger's
+  over the `scale` window**, kWh here), `nestedDevices`. Match the charger's
   channel by `channelNum == "1,2,3"` (or take the `"Main"` channel).
 
 So energy is **per-time-bucket kWh**, not a lifetime counter and not watts.
@@ -84,12 +84,12 @@ So energy is **per-time-bucket kWh**, not a lifetime counter and not watts.
   / Riemann helper for a dashboard lifetime total.
 - **Power (W)**: derived = `kWh_1min * 60 * 1000` (energy per minute → average W
   over that minute); `state_class=measurement`.
-- **Vehicle battery**: field not observed with no car connected — treat as
+- **Vehicle battery**: field not observed with no car connected; treat as
   best-effort / defer until re-captured with a vehicle plugged in.
 
 ## Local env note (dev only)
 
-The throwaway capture scripts force `aiohttp.ThreadedResolver()` — the venv's
+The throwaway capture scripts force `aiohttp.ThreadedResolver()`: the venv's
 `aiodns 3.2.0` / `pycares 5.0.1` pair has an incompatible
 `Channel.getaddrinfo()` signature. The HA integration is unaffected (it uses
 HA's own client session).
