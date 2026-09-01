@@ -14,9 +14,9 @@ draw and status, and wire everything into your automations.
 
 ## Contents
 
-- [Features](#features)
 - [Requirements](#requirements)
 - [Installation (HACS)](#-installation-hacs)
+- [Features](#features)
 - [Configuration](#configuration)
 - [Entities](#entities)
 - [Options](#options)
@@ -26,17 +26,6 @@ draw and status, and wire everything into your automations.
 - [Multiple accounts](#multiple-accounts)
 - [Troubleshooting](#troubleshooting)
 - [Links](#links)
-
-## Features
-
-- 🔌 **One login → all chargers** auto-discovered, each as its own device
-- 🎛️ **Charging switch:** start/stop, optimistic (responds instantly)
-- 🎚️ **Charge-rate slider:** amperage, min/max read from the charger
-- 📊 **Power / Energy / Status** sensors + a **Plugged-in** binary sensor
-- 🚗 **Vehicle battery** sensor when a vehicle is linked in the Emporia app
-- 🔁 **Adaptive polling:** faster while charging, relaxes when idle (configurable)
-- 🔐 **Reauth-in-place** on token expiry; refresh token persisted across restarts
-- ⚡ **Async throughout:** one batched cloud call per poll cycle, with retry on transient blips
 
 ## Requirements
 
@@ -57,6 +46,17 @@ draw and status, and wire everything into your automations.
 5. Add the integration via **Settings → Devices & Services → Add Integration**
    (see Configuration below).
 
+## Features
+
+- 🔌 **One login → all chargers** auto-discovered, each as its own device
+- 🎛️ **Charging switch:** start/stop, optimistic (responds instantly)
+- 🎚️ **Charge-rate slider:** amperage, min/max read from the charger
+- 📊 **Power / Energy / Status** sensors + a **Plugged-in** binary sensor
+- 🚗 **Vehicle battery** sensor when a vehicle is linked in the Emporia app
+- 🔁 **Adaptive polling:** faster while charging, relaxes when idle (configurable)
+- 🔐 **Reauth-in-place** on token expiry; refresh token persisted across restarts
+- ⚡ **Async throughout:** one batched cloud call per poll cycle, with retry on transient blips
+
 ## Configuration
 
 After restarting, go to **Settings → Devices & Services → Add Integration**
@@ -75,6 +75,28 @@ again.
 
 Once authenticated, a device is created for each EV charger on the account and
 all entities are registered immediately.
+
+### Accounts created with Google or Apple sign-in
+
+This integration cannot sign in to an Emporia account that was created with
+"Continue with Google" or "Continue with Apple".
+Such an account has no password, so there is nothing to enter in the form above.
+Accounts created with an email address and password are unaffected.
+
+This is not something the integration can work around.
+Emporia's own sign-in page handles Google and Apple accounts correctly, but it
+will only return the result to a short list of web addresses that Emporia
+registered in advance, and no Home Assistant instance is on that list.
+Only Emporia can change it.
+
+I asked Emporia to add the standard Home Assistant redirect address, which would
+be enough to make this work.
+They declined, on the grounds that they do not provide a public API and do not
+support community integrations.
+
+If this affects you, the most useful thing you can do is tell Emporia support
+that you want to connect your charger to Home Assistant.
+Their position is the only thing that can change this.
 
 ## Entities
 
@@ -217,6 +239,15 @@ more than once with different credentials and all chargers from all accounts
 will appear as separate devices in Home Assistant.
 
 ## Troubleshooting
+
+### "Invalid email or password" with credentials that work in the Emporia app
+
+Check how the Emporia account was created.
+An account made with "Continue with Google" or "Continue with Apple" has no
+password at all, and Emporia's sign-in service answers a login attempt against
+it with the same "incorrect password" response it gives for a genuinely wrong
+password, so the error is misleading rather than wrong.
+See [Accounts created with Google or Apple sign-in](#accounts-created-with-google-or-apple-sign-in).
 
 ### Entities are unavailable / coordinator fails
 
