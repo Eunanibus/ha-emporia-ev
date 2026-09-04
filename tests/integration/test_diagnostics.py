@@ -39,3 +39,20 @@ async def test_diagnostics_redacts_secrets(
     # Charger name (can be a street-address-like label) and serial must be redacted.
     assert diag["chargers"]["chg-1"]["name"] == "**REDACTED**"
     assert diag["chargers"]["chg-1"]["serial"] == "**REDACTED**"
+
+
+async def test_diagnostics_redacts_social_entry_secrets(
+    hass: HomeAssistant, mock_client, social_config_entry
+) -> None:
+    """An OAuth entry's refresh token is a live credential for weeks.
+
+    The title is emitted unredacted, so it must never carry the email either.
+    """
+    entry = await _setup(hass, mock_client, social_config_entry)
+    diag = await async_get_config_entry_diagnostics(hass, entry)
+    assert diag["entry"]["data"]["refresh_token"] == "**REDACTED**"
+    assert diag["entry"]["data"]["username"] == "**REDACTED**"
+    # Not a secret, and useful when triaging a provider-specific report.
+    assert diag["entry"]["data"]["oauth_provider"] == "Google"
+    assert diag["entry"]["data"]["auth_method"] == "oauth"
+    assert "@" not in diag["entry"]["title"]

@@ -13,6 +13,12 @@ PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
 ]
 
+# Config-entry data keys for OAuth entries. A missing CONF_AUTH_METHOD means
+# password, so entries created by the email-and-password flow need no migration.
+CONF_AUTH_METHOD = "auth_method"
+CONF_OAUTH_PROVIDER = "oauth_provider"
+AUTH_METHOD_OAUTH = "oauth"
+
 # Options-flow keys
 CONF_IDLE_INTERVAL = "idle_interval"
 CONF_CHARGING_INTERVAL = "charging_interval"

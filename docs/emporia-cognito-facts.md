@@ -12,6 +12,62 @@ committed under `tests/library/fixtures/`.
 - Token endpoint: `https://cognito-idp.us-east-2.amazonaws.com/`
 - REST auth header: `authtoken: <IdToken>` (the **id** token, not access token).
 
+## Hosted UI (Google and Apple sign-in)
+
+The same app client also fronts an OIDC hosted UI, which is the only way to
+authenticate a federated user. A federated user has no password in the pool and
+its `cognito:username` is `Google_<id>` rather than an email, so SRP fails with
+`UserNotFoundException`.
+
+- Hosted UI: `https://auth.emporiaenergy.com`
+- Endpoints: `/oauth2/authorize`, `/oauth2/token`, `/oauth2/revoke`, `/oauth2/userInfo`, `/logout`
+- The app client is **public**: it has no secret, and a token request must omit
+  `client_secret` entirely rather than send an empty one.
+- PKCE `S256` is accepted but not required. It is used anyway, because a public
+  client offers nothing else to bind a leaked authorization code to.
+- Accepted scope: `openid email`
+- Grants enabled: `authorization_code` and `refresh_token`
+
+Registered redirect URIs, verified 2026-09-03 by sending an unauthenticated
+`GET /oauth2/authorize` and reading the `Location` header. A registered value
+returns `302` to `/login`; an unregistered one returns `302` to
+`/error?error=redirect_mismatch`.
+
+| Redirect URI                                  | Result              |
+| --------------------------------------------- | ------------------- |
+| `https://my.home-assistant.io/redirect/oauth` | accepted            |
+| `https://web.emporiaenergy.com/`              | accepted            |
+| `http://my.home-assistant.io/redirect/oauth`  | `redirect_mismatch` |
+| `http://localhost:8080/`                      | `redirect_mismatch` |
+
+The match includes the scheme, so only the `https` form works. Emporia added the
+My Home Assistant redirect at our request; it is byte-identical to Home
+Assistant's own `MY_AUTH_CALLBACK_PATH` constant.
+
+Provider identifiers passed as `identity_provider`:
+
+| Provider | Value             | Reaches               |
+| -------- | ----------------- | --------------------- |
+| Google   | `Google`          | `accounts.google.com` |
+| Apple    | `SignInWithApple` | `appleid.apple.com`   |
+
+Apple's flow uses Emporia's service id `com.auth.emporiaenergy.prod`.
+
+Token behaviour, from a real Google-federated account:
+
+- A code exchange returns `id_token`, `access_token` and `refresh_token`, with
+  `expires_in` 3600.
+- The id token carries an `email` claim for Google alongside `email_verified`
+  false. The claim depends on the pool's IdP attribute mapping and is not
+  guaranteed for Apple, so it is treated as optional.
+- `InitiateAuth` with `REFRESH_TOKEN_AUTH` works unchanged on a hosted UI
+  refresh token and preserves the federated identity claims, so the refresh path
+  needs no special casing.
+- A refresh returns `AccessToken`, `ExpiresIn`, `IdToken` and `TokenType` only.
+  **No new refresh token is issued**, so a federated entry's refresh token has a
+  fixed absolute lifetime (Cognito's default is 30 days) and eventually requires
+  the browser step again.
+
 ## Base URL
 
 `https://api.emporiaenergy.com`

@@ -54,6 +54,7 @@ draw and status, and wire everything into your automations.
 - 📊 **Power / Energy / Status** sensors + a **Plugged-in** binary sensor
 - 🚗 **Vehicle battery** sensor when a vehicle is linked in the Emporia app
 - 🔁 **Adaptive polling:** faster while charging, relaxes when idle (configurable)
+- 🔑 **Sign in three ways:** email and password, Sign in with Google, or Sign in with Apple
 - 🔐 **Reauth-in-place** on token expiry; refresh token persisted across restarts
 - ⚡ **Async throughout:** one batched cloud call per poll cycle, with retry on transient blips
 
@@ -62,7 +63,19 @@ draw and status, and wire everything into your automations.
 After restarting, go to **Settings → Devices & Services → Add Integration**
 and search for **Emporia EV Charger**.
 
-You will be prompted for:
+You are asked how you sign in to Emporia. Pick the same method you use in the
+Emporia app:
+
+| Method                  | What happens                                            |
+| ----------------------- | ------------------------------------------------------- |
+| **Email and password**  | Enter your Emporia email and password in Home Assistant |
+| **Sign in with Apple**  | Emporia's own sign-in page opens in your browser        |
+| **Sign in with Google** | Emporia's own sign-in page opens in your browser        |
+
+Once authenticated, a device is created for each EV charger on the account and
+all entities are registered immediately.
+
+### Email and password
 
 | Field        | Description                   |
 | ------------ | ----------------------------- |
@@ -70,33 +83,39 @@ You will be prompted for:
 | **Password** | Your Emporia account password |
 
 The integration authenticates via AWS Cognito (same credentials as the Emporia
-app). Tokens are refreshed automatically; you should rarely need to log in
+app). Tokens are refreshed automatically; you should rarely need to sign in
 again.
 
-Once authenticated, a device is created for each EV charger on the account and
-all entities are registered immediately.
+### Google and Apple sign-in
 
-### Accounts created with Google or Apple sign-in
+An Emporia account created with "Continue with Google" or "Continue with Apple"
+has no password, so it cannot be signed in with the form above.
+Choose the matching button on the first screen instead.
 
-This integration cannot sign in to an Emporia account that was created with
-"Continue with Google" or "Continue with Apple".
-Such an account has no password, so there is nothing to enter in the form above.
-Accounts created with an email address and password are unaffected.
+Home Assistant hands you to Emporia's own sign-in page, you authenticate with
+Google or Apple as usual, and the browser returns you to Home Assistant.
+Your Google or Apple password is never seen by this integration or by Home
+Assistant.
 
-This is not something the integration can work around.
-Emporia's own sign-in page handles Google and Apple accounts correctly, but it
-will only return the result to a short list of web addresses that Emporia
-registered in advance, and no Home Assistant instance is on that list.
-Only Emporia can change it.
+This route needs
+[My Home Assistant](https://my.home-assistant.io/) set up in the browser you
+sign in with, because Emporia returns you through
+`https://my.home-assistant.io/redirect/oauth`.
+That is the one return address Emporia has registered for Home Assistant, and
+it is the same mechanism every cloud integration in Home Assistant uses.
+If you have not used My Home Assistant in that browser before, it asks once for
+your instance address and remembers it.
 
-I asked Emporia to add the standard Home Assistant redirect address, which would
-be enough to make this work.
-They declined, on the grounds that they do not provide a public API and do not
-support community integrations.
+Google and Apple accounts store no password, so they cannot re-authenticate
+silently the way an email-and-password account does.
+Expect to repeat the browser step roughly monthly. See
+[Reauthorisation](#reauthorisation).
 
-If this affects you, the most useful thing you can do is tell Emporia support
-that you want to connect your charger to Home Assistant.
-Their position is the only thing that can change this.
+Apple sign-in is implemented but has not been tested against a real
+Apple-linked Emporia account, because no such account was available. The
+Emporia side is confirmed to reach Apple. If you use it, please report what
+happens in
+[issue #2](https://github.com/Eunanibus/ha-emporia-ev/issues/2).
 
 ## Entities
 
@@ -230,6 +249,14 @@ The integration performs a full login using the stored credentials and continues
 A reauth notification appears only if the stored password stops working, for example because it was changed in the Emporia app.
 In that case Home Assistant asks for the updated password: one field, no browser needed.
 
+A hub added with Google or Apple sign-in cannot do that, because no password is
+stored to log in with.
+When its refresh token expires, Home Assistant raises a reauthentication
+notification and you repeat the browser step.
+Emporia's refresh tokens last 30 days by default, so expect this roughly
+monthly. The exact lifetime is configured on Emporia's side and cannot be read
+from outside.
+
 The config entry and all associated entities are preserved through reauthorisation; no re-setup is required.
 
 ## Multiple accounts
@@ -247,7 +274,40 @@ An account made with "Continue with Google" or "Continue with Apple" has no
 password at all, and Emporia's sign-in service answers a login attempt against
 it with the same "incorrect password" response it gives for a genuinely wrong
 password, so the error is misleading rather than wrong.
-See [Accounts created with Google or Apple sign-in](#accounts-created-with-google-or-apple-sign-in).
+Go back and choose "Sign in with Google" or "Sign in with Apple" instead. See
+[Google and Apple sign-in](#google-and-apple-sign-in).
+
+### "Invalid state. Is My Home Assistant configured to go to the right instance?"
+
+This appears after a Google or Apple sign-in when Home Assistant cannot match
+the returning browser to the sign-in it started.
+
+The usual cause is a Home Assistant restart part way through signing in: the
+value used to match the two halves is generated fresh on each start, so a
+restart invalidates a sign-in already in progress. Start again and it works.
+
+Otherwise, check that My Home Assistant points at this instance: open
+[my.home-assistant.io](https://my.home-assistant.io/) in the same browser and
+confirm the instance address it has stored.
+
+### Setup succeeded but no entities appeared
+
+The log will say, with your account number:
+
+```text
+Emporia account 459737 reports no EV chargers; no entities will be created
+```
+
+That means the sign-in worked and the account genuinely has no charger on it.
+The usual cause is signing in with a different Emporia account from the one the
+charger is registered to, which is easy to do with Google or Apple sign-in
+because the browser may already be signed in to another account.
+
+Check which account you landed on: the config entry is titled
+`Emporia (<account number>)`. If it is the wrong one, delete the entry, sign out
+of the wrong account at
+[auth.emporiaenergy.com](https://auth.emporiaenergy.com/logout) or use a private
+window, and add the integration again.
 
 ### Entities are unavailable / coordinator fails
 
