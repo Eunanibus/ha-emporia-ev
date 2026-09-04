@@ -54,6 +54,7 @@ draw and status, and wire everything into your automations.
 - 📊 **Power / Energy / Status** sensors + a **Plugged-in** binary sensor
 - 🚗 **Vehicle battery** sensor when a vehicle is linked in the Emporia app
 - 🔁 **Adaptive polling:** faster while charging, relaxes when idle (configurable)
+- 🔑 **Sign in three ways:** email and password, Sign in with Google, or Sign in with Apple
 - 🔐 **Reauth-in-place** on token expiry; refresh token persisted across restarts
 - ⚡ **Async throughout:** one batched cloud call per poll cycle, with retry on transient blips
 
@@ -288,6 +289,25 @@ restart invalidates a sign-in already in progress. Start again and it works.
 Otherwise, check that My Home Assistant points at this instance: open
 [my.home-assistant.io](https://my.home-assistant.io/) in the same browser and
 confirm the instance address it has stored.
+
+### Setup succeeded but no entities appeared
+
+The log will say, with your account number:
+
+```text
+Emporia account 459737 reports no EV chargers; no entities will be created
+```
+
+That means the sign-in worked and the account genuinely has no charger on it.
+The usual cause is signing in with a different Emporia account from the one the
+charger is registered to, which is easy to do with Google or Apple sign-in
+because the browser may already be signed in to another account.
+
+Check which account you landed on: the config entry is titled
+`Emporia (<account number>)`. If it is the wrong one, delete the entry, sign out
+of the wrong account at
+[auth.emporiaenergy.com](https://auth.emporiaenergy.com/logout) or use a private
+window, and add the integration again.
 
 ### Entities are unavailable / coordinator fails
 
