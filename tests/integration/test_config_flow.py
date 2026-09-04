@@ -299,8 +299,8 @@ async def test_oauth_reauth_survives_unknown_stored_provider(hass: HomeAssistant
     assert result["step_id"] == "reauth_social"
 
 
-async def test_oauth_cancelled_at_provider_aborts(hass: HomeAssistant) -> None:
-    """Cancelling at Google comes back as an error rather than a code."""
+async def _reject_oauth(hass: HomeAssistant, error: str):
+    """Start the Google flow and come back carrying an error instead of a code."""
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"next_step_id": "google"}
@@ -308,12 +308,44 @@ async def test_oauth_cancelled_at_provider_aborts(hass: HomeAssistant) -> None:
     assert result["type"] is FlowResultType.EXTERNAL_STEP
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
-        {"state": {"redirect_uri": MY_AUTH_CALLBACK_PATH}, "error": "access_denied"},
+        {"state": {"redirect_uri": MY_AUTH_CALLBACK_PATH}, "error": error},
     )
     assert result["type"] is FlowResultType.EXTERNAL_STEP_DONE
-    result = await hass.config_entries.flow.async_configure(result["flow_id"])
+    return await hass.config_entries.flow.async_configure(result["flow_id"])
+
+
+async def test_oauth_cancelled_at_provider_uses_our_own_message(hass: HomeAssistant) -> None:
+    """Declining must not surface core's "Account linking rejected: access_denied".
+
+    user_rejected_authorize is in core's _SHARED_ABORT_REASONS, so newer Home
+    Assistant translates it against the homeassistant domain and this
+    integration's wording is discarded. A private reason is the only way to say
+    something useful, so the reason must never be that shared one.
+    """
+    result = await _reject_oauth(hass, "access_denied")
     assert result["type"] is FlowResultType.ABORT
-    assert result["reason"] == "user_rejected_authorize"
+    assert result["reason"] == "sign_in_cancelled"
+    assert result["reason"] != "user_rejected_authorize"
+
+
+async def test_oauth_provider_error_is_distinguished_from_cancelling(
+    hass: HomeAssistant,
+) -> None:
+    """A real provider failure is not the same as the user changing their mind."""
+    result = await _reject_oauth(hass, "server_error")
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "sign_in_rejected"
+    assert result["description_placeholders"]["error"] == "server_error"
+
+
+async def test_oauth_rejection_without_error_code_still_aborts_cleanly(
+    hass: HomeAssistant,
+) -> None:
+    """An empty error must not render an empty placeholder."""
+    result = await _reject_oauth(hass, "")
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "sign_in_rejected"
+    assert result["description_placeholders"]["error"] == "unknown"
 
 
 async def test_oauth_flow_without_refresh_token_aborts(hass: HomeAssistant) -> None:

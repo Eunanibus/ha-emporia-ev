@@ -17,8 +17,11 @@
       },
       "password": {
         "title": "Emporia EV Charger",
-        "description": "Sign in with your Emporia app credentials.",
-        "data": { "username": "Email", "password": "Password" }
+        "description": "Sign in with your Emporia app credentials.\n\nWrong method? If this account was created with Google or Apple, it has no password. Close this dialog and add the integration again to pick that method.",
+        "data": {
+          "username": "Email",
+          "password": "Password"
+        }
       },
       "auth": {
         "title": "Sign in with Emporia"
@@ -26,7 +29,9 @@
       "reauth_confirm": {
         "title": "Re-authenticate Emporia",
         "description": "Your Emporia session expired. Re-enter the password for {username}.",
-        "data": { "password": "Password" }
+        "data": {
+          "password": "Password"
+        }
       },
       "reauth_social": {
         "title": "Re-authenticate Emporia",
@@ -34,7 +39,7 @@
       }
     },
     "error": {
-      "invalid_auth": "Invalid email or password.",
+      "invalid_auth": "Invalid email or password. If this account was created with Google or Apple it has no password, so close this dialog and add the integration again to pick that method.",
       "cannot_connect": "Could not reach the Emporia cloud. Try again.",
       "unknown": "Unexpected error. Check the logs."
     },
@@ -44,6 +49,8 @@
       "wrong_account": "That sign-in is for a different Emporia account than this entry.",
       "cannot_connect": "Could not reach the Emporia cloud. Try again.",
       "unknown": "Unexpected error. Check the logs.",
+      "sign_in_cancelled": "Sign-in was cancelled, so nothing was set up. To try again, add the integration once more from Settings, then Devices and services.",
+      "sign_in_rejected": "The sign-in was refused before it completed ({error}), so nothing was set up. Add the integration again to retry, or pick a different sign-in method.",
       "no_refresh_token": "Emporia completed the sign-in but returned nothing to stay signed in with. Start again from the integrations page.",
       "account_lookup_failed": "The sign-in succeeded but Emporia would not return the account. Start again from the integrations page.",
       "authorize_url_timeout": "Timed out preparing the Emporia sign-in link.",
@@ -52,8 +59,7 @@
       "oauth_unauthorized": "Emporia rejected the sign-in. It may have expired or already been used. Start again from the integrations page.",
       "oauth_failed": "The Emporia sign-in did not complete. Start again from the integrations page.",
       "oauth_error": "Emporia returned an unexpected sign-in response. Check the logs.",
-      "oauth_implementation_unavailable": "The Emporia sign-in method is unavailable. Try again.",
-      "user_rejected_authorize": "Sign-in was cancelled ({error})."
+      "oauth_implementation_unavailable": "The Emporia sign-in method is unavailable. Try again."
     }
   },
   "options": {

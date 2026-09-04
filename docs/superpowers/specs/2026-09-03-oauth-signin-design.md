@@ -97,7 +97,7 @@ class EmporiaConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
     VERSION = 1
 
     def __init__(self) -> None:
-        super().__init__()          # initialises external_data and flow_impl
+        super().__init__()  # initialises external_data and flow_impl
         self._reauth_entry: ConfigEntry | None = None
 
     @property
@@ -237,12 +237,12 @@ Social entries are stored as:
 
 ```python
 {
-    "auth_method": "oauth",              # absent on existing entries, meaning password
-    CONF_USERNAME: "user@example.com",   # optional: only when the id token carries email
+    "auth_method": "oauth",  # absent on existing entries, meaning password
+    CONF_USERNAME: "user@example.com",  # optional: only when the id token carries email
     # CONF_PASSWORD deliberately absent
     "account_id": "459737",
     "refresh_token": "<hosted UI refresh token>",
-    "oauth_provider": "Google",          # Cognito identity_provider value
+    "oauth_provider": "Google",  # Cognito identity_provider value
 }
 ```
 
@@ -281,9 +281,7 @@ if self.source == SOURCE_REAUTH:
     assert entry is not None
     if account_id != entry.unique_id:
         return self.async_abort(reason="wrong_account")
-    return self._async_update_and_abort(
-        entry, {**entry.data, "refresh_token": refresh_token}
-    )
+    return self._async_update_and_abort(entry, {**entry.data, "refresh_token": refresh_token})
 
 await self.async_set_unique_id(account_id)
 self._abort_if_unique_id_configured()
@@ -348,8 +346,15 @@ Both `strings.json` and `translations/en.json` carry every change below.
 - `config.step.reauth_social` is added for the no-input social confirm step, alongside the existing `config.step.reauth_confirm`.
 - `config.step.user.menu_option_descriptions` adds a second line per menu row where the frontend supports it.
 - `config.step.auth` carries a title only. The external step's description is read from a different key and the frontend prepends its own boilerplate, which is why no core integration sets one.
+- `config.step.password.description` and the `invalid_auth` error both name the Google and Apple alternative.
+  A config flow cannot go back a step: the dialog renders only a close button and a help link, and neither the frontend nor `data_entry_flow` keeps step history. Telling the user before they type, and again if the password is rejected, is the available substitute.
 
-New `config.abort` entries: `authorize_url_timeout`, `no_url_available`, `oauth_timeout`, `oauth_unauthorized`, `oauth_failed`, `oauth_error`, `oauth_implementation_unavailable` and `user_rejected_authorize`.
+New `config.abort` entries: `authorize_url_timeout`, `no_url_available`, `oauth_timeout`, `oauth_unauthorized`, `oauth_failed`, `oauth_error` and `oauth_implementation_unavailable`.
+Those are all core-owned on newer releases, so they only take effect on the older end of the supported range.
+
+`async_step_authorize_rejected` is overridden so that a refused sign-in explains itself.
+The base class aborts with `user_rejected_authorize`, which newer Home Assistant renders as "Account linking rejected: access_denied": an internal error code, and no hint about what to do next.
+The override splits that into two private reasons instead, `sign_in_cancelled` for `error=access_denied` and `sign_in_rejected` carrying `{error}` for anything else, both of which say nothing was set up and how to retry.
 `missing_credentials` and `missing_configuration` cannot occur, because `self.flow_impl` is always assigned before `async_step_auth`, so they are omitted.
 `oauth_implementation_unavailable` exists only on newer releases and is harmless on older ones.
 
@@ -410,7 +415,7 @@ The fake id token is built inside the test with `base64.urlsafe_b64encode(json.d
 - The menu offers all three options.
 - The social path is driven in three moves: assert the external step and its authorize URL, resume with `async_configure` carrying a fake `{"state": {...}, "code": ...}`, then call `async_configure` a second time with no input.
   The second call is required, because the first returns `EXTERNAL_STEP_DONE`, which parks in `cur_step`, and the flow manager only re-enters automatically for `SHOW_PROGRESS_DONE`.
-  The `user_rejected_authorize` test needs the same second call.
+  The rejection tests need the same second call.
 - The fake `state` is the decoded dict, not a signed JWT.
   `async_resolve_external_data` reads `external_data["state"]["redirect_uri"]`, so `{"state": {"redirect_uri": MY_AUTH_CALLBACK_PATH}, "code": "abc"}` exercises the exchange without touching the private `_encode_jwt`.
 - The token endpoint is stubbed with `aioclient_mock`, not the suite's existing `_PATCH_SESSION`.
@@ -419,7 +424,7 @@ The fake id token is built inside the test with `base64.urlsafe_b64encode(json.d
 - Assertions cover the authorize URL's `identity_provider`, `code_challenge_method`, `scope` and `redirect_uri`, that the token request body carries `code_verifier` and no `client_secret`, and that the created entry carries `auth_method` `oauth` and no password key.
 - Reauth on a social entry updates the refresh token without aborting `already_configured`.
 - Reauth with a different account aborts with `wrong_account`.
-- A `user_rejected_authorize` resume aborts with that reason.
+- Resuming with `error=access_denied` aborts as `sign_in_cancelled`, and with any other error as `sign_in_rejected` carrying the code. An empty error reports `unknown` rather than an empty placeholder.
 
 `tests/integration/test_init.py` gains `test_setup_social_entry_without_password`, using a `social_config_entry` fixture in `tests/integration/conftest.py` with no `password` key, following the existing patch stack.
 This covers the line that actually breaks for the target users: `entry.data[CONF_PASSWORD]` raising `KeyError` so the entry never loads.

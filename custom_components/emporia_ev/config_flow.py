@@ -271,6 +271,26 @@ class EmporiaConfigFlow(config_entry_oauth2_flow.AbstractOAuth2FlowHandler, doma
         self.flow_impl = EmporiaOAuth2Implementation(self.hass, menu_id)
         return await self.async_step_auth()
 
+    async def async_step_authorize_rejected(self, data: None = None) -> ConfigFlowResult:
+        """Explain a refused sign-in in this integration's own words.
+
+        The base class aborts with `user_rejected_authorize`, which newer Home
+        Assistant owns and renders as "Account linking rejected: access_denied".
+        That names an internal error code and says nothing about what to do, and
+        because the reason is in core's shared set the wording here cannot
+        replace it. Private reasons can carry it, so declining is separated from
+        a genuine provider error.
+        """
+        error = ""
+        if isinstance(self.external_data, dict):
+            error = str(self.external_data.get("error", ""))
+        if error == "access_denied":
+            return self.async_abort(reason="sign_in_cancelled")
+        return self.async_abort(
+            reason="sign_in_rejected",
+            description_placeholders={"error": error or "unknown"},
+        )
+
     async def async_oauth_create_entry(self, data: dict[str, Any]) -> ConfigFlowResult:
         """Create or update an entry from a completed hosted-UI sign-in.
 
