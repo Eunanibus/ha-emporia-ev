@@ -92,8 +92,28 @@ class EmporiaConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
 `async_step_user` overrides the base implementation, which would otherwise jump straight to `async_step_pick_implementation`, and returns a menu:
 
 ```text
-menu_options = ["password", "google", "apple"]
+menu_options = {
+    "password": "Email and password",
+    "apple": "Sign in with Apple",
+    "google": "Sign in with Google",
+}
 ```
+
+#### Why a menu and not one form with social buttons
+
+The wanted shape is username and password fields, an "or" divider, then two branded buttons.
+Home Assistant cannot render that, for three separate reasons in `data_entry_flow.py`:
+
+- `FlowResultType` makes `FORM` and `MENU` distinct result types, and a step returns exactly one, so no step can show schema fields and navigation targets together.
+- A `FORM` renders its schema fields plus one submit button.
+  Nothing in a form can move the flow to another step except submitting that form.
+- `async_show_menu` accepts only `menu_options` and `description_placeholders`, and `data_entry_flow.py` contains no icon support at all, so menu entries cannot carry a Google or Apple mark.
+
+A single form carrying a radio selector for the method alongside optional username and password fields would put everything on one screen, but it forces conditional validation, shows credential fields to someone who picked Google, and still has no icons.
+That is worse than the menu, so it is rejected.
+
+The menu is therefore three labelled rows, with `password` first so the common case stays the default.
+Choosing `password` costs one extra click compared to today.
 
 Today's email and password logic moves unchanged into `async_step_password`.
 `async_step_user` ignores `user_input` and always returns the menu, because `async_show_menu` does not mark `next_step_id` required, so an empty submit validates and the flow manager re-dispatches back into the same step.
@@ -280,8 +300,9 @@ Both `strings.json` and `translations/en.json` carry every change below.
   `config.progress` is for `SHOW_PROGRESS` steps and does not apply here.
 - `config.step.reauth_confirm` gains the no-input social variant.
 
-New `config.abort` entries: `authorize_url_timeout`, `no_url_available`, `oauth_timeout`, `oauth_unauthorized`, `oauth_failed`, `oauth_error` and `user_rejected_authorize`.
+New `config.abort` entries: `authorize_url_timeout`, `no_url_available`, `oauth_timeout`, `oauth_unauthorized`, `oauth_failed`, `oauth_error`, `oauth_implementation_unavailable` and `user_rejected_authorize`.
 `missing_credentials` and `missing_configuration` cannot occur, because `self.flow_impl` is always assigned before `async_step_auth`, so they are omitted.
+`oauth_implementation_unavailable` exists only on newer releases and is harmless on older ones.
 
 `cannot_connect` and `unknown` exist today only under `config.error`, which the frontend reads for form errors.
 The social path has no form after the external step, so both failures abort instead and need `config.abort` entries of their own.

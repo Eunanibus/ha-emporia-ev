@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import logging
+
+import aiohttp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .client import EmporiaAuth, EmporiaClient
-from .const import PLATFORMS
+from .client import EmporiaAuth, EmporiaClient, EmporiaError, async_revoke
+from .const import AUTH_METHOD_OAUTH, CONF_AUTH_METHOD, PLATFORMS
 from .coordinator import EmporiaDataUpdateCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 type EmporiaConfigEntry = ConfigEntry[EmporiaDataUpdateCoordinator]
 
@@ -47,3 +52,23 @@ async def async_reload_entry(hass: HomeAssistant, entry: EmporiaConfigEntry) -> 
 async def async_migrate_entry(hass: HomeAssistant, entry: EmporiaConfigEntry) -> bool:
     """Migrate old config entries. VERSION is 1; refuse unknown newer versions."""
     return not entry.version > 1
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: EmporiaConfigEntry) -> None:
+    """Revoke an OAuth entry's refresh token as the entry is deleted.
+
+    Deleting the integration should not leave a live account credential valid
+    for weeks. This is best effort, and best effort has to be enforced here:
+    ``async_revoke`` raises on a non-200 and does not wrap transport failures,
+    and Home Assistant logs anything raised from this hook with
+    ``_LOGGER.exception``.
+    """
+    if entry.data.get(CONF_AUTH_METHOD) != AUTH_METHOD_OAUTH:
+        return
+    refresh_token = entry.data.get("refresh_token")
+    if not refresh_token:
+        return
+    try:
+        await async_revoke(async_get_clientsession(hass), refresh_token)
+    except (EmporiaError, aiohttp.ClientError, TimeoutError):
+        _LOGGER.debug("Revoking the Emporia refresh token failed", exc_info=True)

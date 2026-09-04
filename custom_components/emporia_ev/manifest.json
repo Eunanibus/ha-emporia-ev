@@ -3,6 +3,7 @@
   "name": "Emporia EV Charger",
   "codeowners": ["@Eunanibus"],
   "config_flow": true,
+  "dependencies": ["auth"],
   "documentation": "https://github.com/Eunanibus/ha-emporia-ev",
   "integration_type": "hub",
   "iot_class": "cloud_polling",

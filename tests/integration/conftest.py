@@ -107,3 +107,26 @@ def mock_config_entry() -> MockConfigEntry:
             CONF_DEFAULT_AMPS: 32,
         },
     )
+
+
+@pytest.fixture
+def social_config_entry() -> MockConfigEntry:
+    """A config entry created by Google sign-in: no password key at all."""
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title="Emporia (acct-42)",
+        unique_id="acct-42",
+        data={
+            "auth_method": "oauth",
+            "oauth_provider": "Google",
+            "username": "user@example.com",
+            "refresh_token": "refresh-from-hosted-ui",
+            "account_id": "acct-42",
+        },
+        options={
+            CONF_IDLE_INTERVAL: 30,
+            CONF_CHARGING_INTERVAL: 15,
+            CONF_ADAPTIVE: True,
+            CONF_DEFAULT_AMPS: 32,
+        },
+    )
