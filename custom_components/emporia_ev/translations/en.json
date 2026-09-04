@@ -8,6 +8,11 @@
           "password": "Email and password",
           "apple": "Sign in with Apple",
           "google": "Sign in with Google"
+        },
+        "menu_option_descriptions": {
+          "password": "For an account created with an email address and a password.",
+          "apple": "Opens Emporia's sign-in page in your browser.",
+          "google": "Opens Emporia's sign-in page in your browser."
         }
       },
       "password": {
@@ -39,6 +44,8 @@
       "wrong_account": "That sign-in is for a different Emporia account than this entry.",
       "cannot_connect": "Could not reach the Emporia cloud. Try again.",
       "unknown": "Unexpected error. Check the logs.",
+      "no_refresh_token": "Emporia completed the sign-in but returned nothing to stay signed in with. Start again from the integrations page.",
+      "account_lookup_failed": "The sign-in succeeded but Emporia would not return the account. Start again from the integrations page.",
       "authorize_url_timeout": "Timed out preparing the Emporia sign-in link.",
       "no_url_available": "Home Assistant has no URL to return to after sign-in. See {docs_url}.",
       "oauth_timeout": "Timed out completing the Emporia sign-in.",

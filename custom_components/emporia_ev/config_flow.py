@@ -159,20 +159,29 @@ class EmporiaOAuth2Implementation(config_entry_oauth2_flow.LocalOAuth2Implementa
             "code_challenge_method": "S256",
         }
 
+    @property
+    def extra_token_resolve_data(self) -> dict[str, Any]:
+        """Extra body fields for the code exchange.
+
+        Newer Home Assistant reads this hook when building the token request.
+        The supported floor has no such hook, so ``async_resolve_external_data``
+        is overridden as well and merges this in. Defining both keeps the
+        verifier attached whichever path core takes.
+        """
+        return {"code_verifier": self._pkce.verifier}
+
     async def async_resolve_external_data(self, external_data: Any) -> dict[str, Any]:
         """Exchange the authorization code, adding the PKCE verifier.
 
-        Newer Home Assistant releases offer an ``extra_token_resolve_data``
-        hook, which the supported floor does not have, so the whole method is
-        overridden instead. ``redirect_uri`` is read back out of the signed
-        state, so it matches the value used at authorize time.
+        ``redirect_uri`` is read back out of the signed state, so it matches the
+        value used at authorize time.
         """
         return await self._token_request(
             {
                 "grant_type": "authorization_code",
                 "code": external_data["code"],
                 "redirect_uri": external_data["state"]["redirect_uri"],
-                "code_verifier": self._pkce.verifier,
+                **self.extra_token_resolve_data,
             }
         )
 
@@ -191,6 +200,17 @@ class EmporiaConfigFlow(config_entry_oauth2_flow.AbstractOAuth2FlowHandler, doma
     def logger(self) -> logging.Logger:
         """Return the logger the OAuth helper writes through."""
         return _LOGGER
+
+    def _async_update_and_abort(self, entry: ConfigEntry, data: dict[str, Any]) -> ConfigFlowResult:
+        """Persist re-authenticated data and finish the flow.
+
+        Not ``async_update_reload_and_abort``: that reloads the entry itself and
+        warns when the entry has an update listener, which this integration
+        registers in ``async_setup_entry``. Updating the entry lets the existing
+        listener perform exactly one reload.
+        """
+        self.hass.config_entries.async_update_entry(entry, data=data)
+        return self.async_abort(reason="reauth_successful")
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Offer the sign-in methods.
@@ -260,15 +280,20 @@ class EmporiaConfigFlow(config_entry_oauth2_flow.AbstractOAuth2FlowHandler, doma
         """
         token: dict[str, Any] = data["token"]
         refresh_token = token.get("refresh_token")
+        # These reasons are deliberately integration-specific. Newer Home
+        # Assistant keeps a _SHARED_ABORT_REASONS set (oauth_error,
+        # oauth_unauthorized and friends) and forces those to translate against
+        # the homeassistant domain, so reusing one here would silently replace
+        # our wording with core's generic OAuth copy and misdescribe the cause.
         if not refresh_token:
             _LOGGER.error("Emporia returned no refresh token for the hosted UI sign-in")
-            return self.async_abort(reason="oauth_error")
+            return self.async_abort(reason="no_refresh_token")
 
         try:
             account_id = await async_validate_refresh_token(self.hass, refresh_token)
         except AuthError:
             # Not invalid_auth: no email or password was involved here.
-            return self.async_abort(reason="oauth_unauthorized")
+            return self.async_abort(reason="account_lookup_failed")
         except EmporiaConnectionError:
             return self.async_abort(reason="cannot_connect")
         # Must stay AFTER the two branches above: both subclass EmporiaError.
@@ -281,8 +306,8 @@ class EmporiaConfigFlow(config_entry_oauth2_flow.AbstractOAuth2FlowHandler, doma
             assert entry is not None
             if account_id != entry.unique_id:
                 return self.async_abort(reason="wrong_account")
-            return self.async_update_reload_and_abort(
-                entry, data={**entry.data, "refresh_token": refresh_token}
+            return self._async_update_and_abort(
+                entry, {**entry.data, "refresh_token": refresh_token}
             )
 
         await self.async_set_unique_id(account_id)
@@ -355,9 +380,9 @@ class EmporiaConfigFlow(config_entry_oauth2_flow.AbstractOAuth2FlowHandler, doma
             else:
                 if account_id != self._reauth_entry.unique_id:
                     return self.async_abort(reason="wrong_account")
-                return self.async_update_reload_and_abort(
+                return self._async_update_and_abort(
                     self._reauth_entry,
-                    data={
+                    {
                         **self._reauth_entry.data,
                         CONF_PASSWORD: user_input[CONF_PASSWORD],
                         "refresh_token": refresh_token,

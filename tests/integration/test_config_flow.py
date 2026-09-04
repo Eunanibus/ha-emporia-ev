@@ -327,7 +327,7 @@ async def test_oauth_flow_without_refresh_token_aborts(hass: HomeAssistant) -> N
         },
     )
     assert result["type"] is FlowResultType.ABORT
-    assert result["reason"] == "oauth_error"
+    assert result["reason"] == "no_refresh_token"
 
 
 async def test_oauth_flow_connection_error_aborts(hass: HomeAssistant) -> None:
@@ -347,7 +347,9 @@ async def test_oauth_flow_rejected_token_aborts_without_credential_wording(
     """AuthError subclasses EmporiaError, so ordering matters.
 
     It must not surface invalid_auth, whose string reads "Invalid email or
-    password" and would be nonsense after a Google sign-in.
+    password" and would be nonsense after a Google sign-in. It also must not
+    reuse a reason from core's _SHARED_ABORT_REASONS set, which newer Home
+    Assistant translates against the homeassistant domain, discarding our copy.
     """
     from custom_components.emporia_ev.client import AuthError
 
@@ -355,7 +357,7 @@ async def test_oauth_flow_rejected_token_aborts_without_credential_wording(
         hass, authenticate_error=AuthError("token rejected")
     )
     assert result["type"] is FlowResultType.ABORT
-    assert result["reason"] == "oauth_unauthorized"
+    assert result["reason"] == "account_lookup_failed"
 
 
 async def test_oauth_flow_missing_account_id_aborts(hass: HomeAssistant) -> None:
