@@ -1,6 +1,6 @@
 # Design: Google and Apple sign-in over Home Assistant's native OAuth flow
 
-Status: approved, not yet implemented.
+Status: implemented.
 Issue: [#2 Oauth Sigin](https://github.com/Eunanibus/ha-emporia-ev/issues/2).
 Branch: `feat/oauth-signin`, cut from `main`.
 
@@ -59,9 +59,20 @@ Home Assistant facts, read from the pinned 2025.1.4 in `.venv`:
 - The signing secret is generated per run, so a sign-in that spans a Home Assistant restart fails that check and shows that same message, which misdiagnoses the cause.
 - `async_step_creation` calls `async_oauth_create_entry` with `{"auth_implementation": ..., "token": token}` rather than the token dict itself.
 - `components/my` registers a redirect panel and has nothing to do with the OAuth callback, so the `my` check inside `redirect_uri` is a proxy for "this instance is reachable through my.home-assistant.io" rather than a functional requirement.
-- `LocalOAuth2Implementation.__init__` annotates `client_secret` as `str`, both in 2025.1.4 and on `dev`.
-- Home Assistant `dev` adds `LocalOAuth2ImplementationWithPkce`, an `extra_token_resolve_data` hook, and a `redirect_uri` refactored to `async_get_redirect_uri(self.hass)`.
-  Overriding `redirect_uri` and `async_resolve_external_data` stays valid on both, and the PKCE override becomes deletable if the supported floor ever rises to a release shipping that class.
+- `LocalOAuth2Implementation.__init__` annotates `client_secret` as `str` on every release checked.
+
+Read from the live test instance, which runs 2026.9.0 on Python 3.14, since that is the real runtime target while 2025.1.4 is what the dev venv can install:
+
+- `LocalOAuth2ImplementationWithPkce` and an `extra_token_resolve_data` hook exist, and `redirect_uri` delegates to a module-level `async_get_redirect_uri(hass)` with the same `my`-component condition.
+  Overriding `redirect_uri` and `async_resolve_external_data` still works, and both are still called.
+- `_token_request` omits `client_secret` when it is falsy rather than when it `is not None`, so `None` is the one value correct on both releases and `""` is wrong on the older one.
+- `_token_request` raises typed `OAuth2TokenRequestError` subclasses instead of `ClientResponseError`, and maps 400 to the reauth variant.
+  A stale or reused code therefore aborts as `oauth_unauthorized` here and as `oauth_failed` on 2025.1.4.
+  Both are core-owned strings (see below), and the override is unaffected because the mapping happens inside `_token_request`.
+- A `_SHARED_ABORT_REASONS` set plus an `async_abort` override force `authorize_url_timeout`, `missing_credentials`, `no_url_available`, `oauth_error`, `oauth_failed`, `oauth_implementation_unavailable`, `oauth_timeout`, `oauth_unauthorized` and `user_rejected_authorize` to translate against the `homeassistant` domain.
+  This integration's strings for those reasons are therefore ignored on this release, which is why the two failures it raises itself use private reasons.
+- `async_update_reload_and_abort` reports a deprecation, breaking in 2026.12, when the entry has an update listener.
+- `async_show_menu` gained a `sort` parameter and still supports a plain list of step ids. There is still no icon support for menu rows.
 
 ## Design
 
@@ -85,35 +96,53 @@ class EmporiaConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
     DOMAIN = DOMAIN
     VERSION = 1
 
+    def __init__(self) -> None:
+        super().__init__()          # initialises external_data and flow_impl
+        self._reauth_entry: ConfigEntry | None = None
+
     @property
     def logger(self) -> logging.Logger: ...
 ```
 
+The `super().__init__()` call is not optional.
+The base class initialises `external_data` and `flow_impl` there and enforces the `DOMAIN` guard, so skipping it fails later with an `AttributeError` on `flow_impl` that points nowhere near the cause.
+
 `async_step_user` overrides the base implementation, which would otherwise jump straight to `async_step_pick_implementation`, and returns a menu:
 
 ```text
-menu_options = {
-    "password": "Email and password",
-    "apple": "Sign in with Apple",
-    "google": "Sign in with Google",
-}
+menu_options = ["password", "apple", "google"]
 ```
+
+The list form matters: labels then come from `config.step.user.menu_options.<id>` and are translated.
+Passing a dict would use its values verbatim and untranslated.
 
 #### Why a menu and not one form with social buttons
 
 The wanted shape is username and password fields, an "or" divider, then two branded buttons.
-Home Assistant cannot render that, for three separate reasons in `data_entry_flow.py`:
+Home Assistant cannot deliver it.
 
-- `FlowResultType` makes `FORM` and `MENU` distinct result types, and a step returns exactly one, so no step can show schema fields and navigation targets together.
-- A `FORM` renders its schema fields plus one submit button.
-  Nothing in a form can move the flow to another step except submitting that form.
-- `async_show_menu` accepts only `menu_options` and `description_placeholders`, and `data_entry_flow.py` contains no icon support at all, so menu entries cannot carry a Google or Apple mark.
+The layout itself is renderable: a form's description is markdown, and core ships a field-less form whose description is an authorization link (`components/tellduslive/config_flow.py`), so links and even images do appear on a form.
+What forecloses the design is the resume path, not the rendering.
 
-A single form carrying a radio selector for the method alongside optional username and password fields would put everything on one screen, but it forces conditional validation, shows credential fields to someone who picked Google, and still has no icons.
-That is worse than the menu, so it is rejected.
+- The callback view resumes the flow with `async_configure(flow_id, {"state": ..., "code": ...})`.
+  A flow parked on a form with a credential schema rejects that payload as `InvalidData`.
+- Even with a permissive schema the dialog never advances, because the frontend is told a step progressed only when the current step is `EXTERNAL_STEP` or `SHOW_PROGRESS`.
+  The entry would be created behind a form that stays open.
+- `FlowResultType` makes `FORM` and `MENU` distinct, and a step returns exactly one, so fields and navigation targets cannot share a step in any case.
+
+Icons are not available on menu rows either.
+The frontend renders each row as a label, an optional second line, and a trailing chevron.
+Icons do exist in flows, but only for collapsible form sections, not for menu rows or select options.
+
+A single form carrying a radio selector for the method alongside optional credential fields was considered and rejected.
+`SelectSelector` options carry only a value and a label, the frontend's image-capable select mode and its per-field conditional visibility are both unreachable from Python, so that form still shows password boxes to a Google user and still has no icons.
 
 The menu is therefore three labelled rows, with `password` first so the common case stays the default.
 Choosing `password` costs one extra click compared to today.
+`menu_option_descriptions` adds an explanatory second line per row on releases whose frontend supports it, and localizes to nothing on those that do not.
+
+This shape has direct precedent: `components/lametric/config_flow.py` is an `AbstractOAuth2FlowHandler` whose `async_step_user` delegates to a menu, and `components/habitica` routes a menu to either a credentials form or an alternative.
+No `AbstractOAuth2FlowHandler` in core puts credentials and an OAuth alternative in one step.
 
 Today's email and password logic moves unchanged into `async_step_password`.
 `async_step_user` ignores `user_input` and always returns the menu, because `async_show_menu` does not mark `next_step_id` required, so an empty submit validates and the flow manager re-dispatches back into the same step.
@@ -242,24 +271,39 @@ Without the branch, reauth aborts with `already_configured` and strands exactly 
 
 ```python
 token = data["token"]
-account_id = await async_validate_refresh_token(self.hass, token["refresh_token"])
-await self.async_set_unique_id(account_id)
+refresh_token = token.get("refresh_token")
+if not refresh_token:
+    return self.async_abort(reason="no_refresh_token")
+account_id = await async_validate_refresh_token(self.hass, refresh_token)
 
 if self.source == SOURCE_REAUTH:
     entry = self._reauth_entry
+    assert entry is not None
     if account_id != entry.unique_id:
         return self.async_abort(reason="wrong_account")
-    return self.async_update_reload_and_abort(
-        entry, data={**entry.data, "refresh_token": token["refresh_token"]}
+    return self._async_update_and_abort(
+        entry, {**entry.data, "refresh_token": refresh_token}
     )
 
+await self.async_set_unique_id(account_id)
 self._abort_if_unique_id_configured()
 return self.async_create_entry(title=f"Emporia ({account_id})", data={...})
 ```
 
+`async_set_unique_id` is called only in the create branch.
+A reauth context already carries the unique id, so a second call buys nothing, and its progress check can abort a reauth with `already_in_progress` when another flow for the same account is open.
+The `assert` mirrors what `async_step_reauth_confirm` already does, and is required because `_reauth_entry` is optional.
+
 This keeps the manual `unique_id` comparison and the `**entry.data` splat that the current reauth path already uses.
-`_abort_if_unique_id_mismatch`, `_get_reauth_entry` and `data_updates=` all exist in the pinned 2025.1.4 and would read better, but which release introduced them is not established, `README.md` promises 2024.8, and `hacs.json` declares no `homeassistant` floor, so HACS will install this on anything.
+`_abort_if_unique_id_mismatch`, `_get_reauth_entry` and `data_updates=` exist in the pinned 2025.1.4 but not in 2024.8, and `README.md` promises 2024.8 while `hacs.json` declares no `homeassistant` floor, so HACS will install this on anything.
 Using only the APIs the file already depends on avoids silently breaking older installs to save three lines.
+
+Both reauth paths finish through a small `_async_update_and_abort` helper rather than `async_update_reload_and_abort`.
+That call reloads the entry itself and warns when the entry has an update listener, which `async_setup_entry` registers, with removal announced for 2026.12.
+Updating the entry and letting the existing listener reload it is correct on every supported release and performs one reload instead of two.
+
+`no_refresh_token` and `account_lookup_failed` are deliberately integration-specific reasons.
+Newer Home Assistant keeps a shared set of OAuth abort reasons (`oauth_error`, `oauth_unauthorized`, `oauth_failed` and others) and forces those to translate against the `homeassistant` domain, so reusing one would discard this integration's wording and show core's generic OAuth copy for a cause it does not describe.
 
 ### Resolving the account id on the social path
 
@@ -274,9 +318,12 @@ On the social path `AuthError` must not map to `invalid_auth`, whose string read
 
 ### Reauth
 
-`async_step_reauth_confirm` branches on `auth_method`.
-Password entries keep today's password form.
-Social entries show a form with no fields, and build the implementation for the stored `oauth_provider` and enter `async_step_auth()` only once the user submits it.
+`async_step_reauth` routes on `auth_method` to one of two steps.
+Password entries keep today's `reauth_confirm` password form.
+Social entries go to a separate `async_step_reauth_social`, which shows a form with no fields and builds the implementation for the stored `oauth_provider`, entering `async_step_auth()` only once the user submits it.
+
+Two steps rather than a branch inside `reauth_confirm`, for two reasons.
+One step id can carry only one description, and `reauth_confirm` reads `entry.data[CONF_USERNAME]` unconditionally, which a social entry may not have at all.
 
 That empty form is not ceremony.
 `ConfigEntryAuthFailed` starts the reauth flow in the background, with nobody watching and no request in context, so `async_step_reauth_confirm` runs at the moment of failure.
@@ -298,7 +345,9 @@ Both `strings.json` and `translations/en.json` carry every change below.
 - The current `config.step.user` body, which is the password form, moves to `config.step.password` unchanged.
 - The external step is translated at `config.step.auth.title`, as core's own OAuth integrations do.
   `config.progress` is for `SHOW_PROGRESS` steps and does not apply here.
-- `config.step.reauth_confirm` gains the no-input social variant.
+- `config.step.reauth_social` is added for the no-input social confirm step, alongside the existing `config.step.reauth_confirm`.
+- `config.step.user.menu_option_descriptions` adds a second line per menu row where the frontend supports it.
+- `config.step.auth` carries a title only. The external step's description is read from a different key and the frontend prepends its own boilerplate, which is why no core integration sets one.
 
 New `config.abort` entries: `authorize_url_timeout`, `no_url_available`, `oauth_timeout`, `oauth_unauthorized`, `oauth_failed`, `oauth_error`, `oauth_implementation_unavailable` and `user_rejected_authorize`.
 `missing_credentials` and `missing_configuration` cannot occur, because `self.flow_impl` is always assigned before `async_step_auth`, so they are omitted.
