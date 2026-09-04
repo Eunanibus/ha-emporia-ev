@@ -5,11 +5,13 @@
     "@Eunanibus"
   ],
   "config_flow": true,
-  "dependencies": ["auth"],
+  "dependencies": [
+    "auth"
+  ],
   "documentation": "https://github.com/Eunanibus/ha-emporia-ev",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/Eunanibus/ha-emporia-ev/issues",
   "requirements": [],
-  "version": "0.1.4"
+  "version": "0.1.5"
 }
